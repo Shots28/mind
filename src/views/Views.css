@@ -11,6 +11,51 @@
     gap: 32px;
 }
 
+/* Day Navigation */
+.day-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.day-nav-arrow {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    transition: background 0.15s;
+}
+
+.day-nav-arrow:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.day-nav-label {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.day-nav-today {
+    margin-left: 8px;
+    padding: 6px 14px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.day-nav-today:hover {
+    opacity: 0.85;
+}
+
 .today-side-column {
     flex: 1;
     min-width: 300px;

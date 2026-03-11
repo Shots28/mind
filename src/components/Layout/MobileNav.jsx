@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, Plus, Repeat } from 'lucide-react';
+import { Home, CheckSquare, Plus, Repeat } from 'lucide-react';
 import TaskForm from '../Tasks/TaskForm';
 import Modal from '../Common/Modal';
 import './Layout.css';
@@ -10,7 +10,6 @@ const MobileNav = () => {
 
     const navItems = [
         { name: 'Today', path: '/today', icon: <Home size={22} /> },
-        { name: 'Calendar', path: '/calendar', icon: <Calendar size={22} /> },
         { name: 'Add', icon: <Plus size={24} />, isAction: true },
         { name: 'Tasks', path: '/tasks', icon: <CheckSquare size={22} /> },
         { name: 'Habits', path: '/habits', icon: <Repeat size={22} /> },

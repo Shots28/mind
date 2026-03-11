@@ -4,7 +4,6 @@ import { useAuth } from './contexts/AuthContext';
 import MainLayout from './components/Layout/MainLayout';
 import AuthPage from './components/Auth/AuthPage';
 import TodayView from './views/TodayView';
-import CalendarView from './views/CalendarView';
 import TasksView from './views/TasksView';
 import JournalView from './views/JournalView';
 import ProjectsView from './views/ProjectsView';
@@ -30,7 +29,7 @@ function App() {
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/today" replace /> : <AuthPage />} />
         <Route path="/today" element={<ProtectedRoute><TodayView /></ProtectedRoute>} />
-        <Route path="/calendar" element={<ProtectedRoute><CalendarView /></ProtectedRoute>} />
+        <Route path="/calendar" element={<Navigate to="/today" replace />} />
         <Route path="/tasks" element={<ProtectedRoute><TasksView /></ProtectedRoute>} />
         <Route path="/journal" element={<ProtectedRoute><JournalView /></ProtectedRoute>} />
         <Route path="/projects" element={<ProtectedRoute><ProjectsView /></ProtectedRoute>} />

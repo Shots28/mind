@@ -60,10 +60,19 @@
     background: rgba(255, 255, 255, 0.1);
 }
 
-.calendar-day.active {
+.calendar-day.today {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+.calendar-day.selected {
     background: var(--accent-color);
     color: white;
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.calendar-day.today.selected {
+    color: white;
 }
 
 .event-dot {
@@ -75,6 +84,6 @@
     bottom: 6px;
 }
 
-.calendar-day.active .event-dot {
+.calendar-day.selected .event-dot {
     background-color: white;
 }

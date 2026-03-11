@@ -1,9 +1,29 @@
-import { useMemo } from 'react';
-import { useHabits } from '../../contexts/HabitContext';
+import { useEffect, useMemo } from 'react';
+import { useHabits, isHabitDueOnDate } from '../../contexts/HabitContext';
 import { Flame, TrendingUp } from 'lucide-react';
 
-export default function HabitStats({ compact = false }) {
-  const { todayProgress, todayHabits, weekLogs } = useHabits();
+export default function HabitStats({ compact = false, date }) {
+  const { habits, todayProgress, todayHabits, weekLogs, fetchLogsForDate, getLogsForDate } = useHabits();
+
+  const today = new Date().toISOString().split('T')[0];
+  const isToday = !date || date === today;
+
+  useEffect(() => {
+    if (!isToday && date) fetchLogsForDate(date);
+  }, [date, isToday, fetchLogsForDate]);
+
+  const dueHabits = useMemo(() => {
+    if (isToday) return todayHabits;
+    return habits.filter(h => isHabitDueOnDate(h, date));
+  }, [isToday, todayHabits, habits, date]);
+
+  const progress = useMemo(() => {
+    if (isToday) return todayProgress;
+    const logs = getLogsForDate(date);
+    const total = dueHabits.length;
+    const completed = dueHabits.filter(h => logs.some(l => l.habit_id === h.id)).length;
+    return { total, completed, percent: total ? Math.round((completed / total) * 100) : 0 };
+  }, [isToday, todayProgress, date, dueHabits, getLogsForDate]);
 
   const weekData = useMemo(() => {
     const days = [];
@@ -16,13 +36,13 @@ export default function HabitStats({ compact = false }) {
       days.push({
         label: d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0),
         completed,
-        total: todayHabits.length || 1,
+        total: dueHabits.length || 1,
       });
     }
     return days;
-  }, [weekLogs, todayHabits]);
+  }, [weekLogs, dueHabits]);
 
-  if (todayHabits.length === 0) return null;
+  if (dueHabits.length === 0) return null;
 
   const maxCompleted = Math.max(...weekData.map(d => d.completed), 1);
 
@@ -31,12 +51,12 @@ export default function HabitStats({ compact = false }) {
       <div className="habit-stats-summary">
         <div className="habit-stat">
           <Flame size={16} className="habit-stat-icon" />
-          <span className="habit-stat-value">{todayProgress.completed}/{todayProgress.total}</span>
-          <span className="habit-stat-label">today</span>
+          <span className="habit-stat-value">{progress.completed}/{progress.total}</span>
+          <span className="habit-stat-label">{isToday ? 'today' : 'done'}</span>
         </div>
         <div className="habit-stat">
           <TrendingUp size={16} className="habit-stat-icon" />
-          <span className="habit-stat-value">{todayProgress.percent}%</span>
+          <span className="habit-stat-value">{progress.percent}%</span>
           <span className="habit-stat-label">done</span>
         </div>
       </div>

@@ -172,7 +172,7 @@ export default function TasksView() {
       )}
 
       <Modal isOpen={showTaskForm} onClose={() => setShowTaskForm(false)} title="New Task">
-        <TaskForm defaultContextId={activeContext !== 'all' ? activeContext : ''} onClose={() => setShowTaskForm(false)} />
+        <TaskForm defaultContextId={activeContext !== 'all' ? activeContext : ''} defaultDueDate={dateFilter || ''} onClose={() => setShowTaskForm(false)} />
       </Modal>
     </div>
   );

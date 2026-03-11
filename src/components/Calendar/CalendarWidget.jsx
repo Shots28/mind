@@ -7,7 +7,7 @@ import './Calendar.css';
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const CalendarWidget = () => {
+const CalendarWidget = ({ selectedDate, onSelectDate }) => {
     const calendar = useCalendar();
     const { events } = useEvents();
     const { tasks } = useTasks();
@@ -40,10 +40,12 @@ const CalendarWidget = () => {
                 ))}
                 {calendar.days.map(day => {
                     const hasItems = hasItemsOnDay(day.dateString);
+                    const isSelected = selectedDate === day.dateString;
                     return (
                         <div
                             key={day.day}
-                            className={`calendar-day ${day.isToday ? 'active' : ''} ${hasItems ? 'has-events' : ''}`}
+                            className={`calendar-day ${day.isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${hasItems ? 'has-events' : ''}`}
+                            onClick={() => onSelectDate && onSelectDate(day.dateString)}
                         >
                             {day.day}
                             {hasItems && <div className="event-dot"></div>}

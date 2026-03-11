@@ -8,6 +8,7 @@ const initialState = {
   habits: [],
   todayLogs: [],
   weekLogs: [],
+  dateLogs: {},
   loading: true,
 };
 
@@ -29,6 +30,8 @@ function reducer(state, action) {
       return { ...state, todayLogs: state.todayLogs.filter(l => l.id !== action.payload) };
     case 'SET_WEEK_LOGS':
       return { ...state, weekLogs: action.payload };
+    case 'SET_DATE_LOGS':
+      return { ...state, dateLogs: { ...state.dateLogs, [action.payload.date]: action.payload.logs } };
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
     default:
@@ -38,6 +41,15 @@ function reducer(state, action) {
 
 function isHabitDueToday(habit) {
   const day = new Date().getDay(); // 0=Sun
+  return isHabitDueOnDay(habit, day);
+}
+
+export function isHabitDueOnDate(habit, dateStr) {
+  const day = new Date(dateStr + 'T12:00:00').getDay();
+  return isHabitDueOnDay(habit, day);
+}
+
+function isHabitDueOnDay(habit, day) {
   switch (habit.frequency) {
     case 'daily': return true;
     case 'weekdays': return day >= 1 && day <= 5;
@@ -124,6 +136,20 @@ export function HabitProvider({ children }) {
     if (error) { fetchHabits(); throw error; }
   };
 
+  const fetchLogsForDate = useCallback(async (dateStr) => {
+    if (!user) return;
+    if (state.dateLogs[dateStr]) return;
+    const { data } = await supabase
+      .from('habit_logs')
+      .select('*')
+      .eq('date', dateStr);
+    if (data) dispatch({ type: 'SET_DATE_LOGS', payload: { date: dateStr, logs: data } });
+  }, [user, state.dateLogs]);
+
+  const getLogsForDate = useCallback((dateStr) => {
+    return state.dateLogs[dateStr] || [];
+  }, [state.dateLogs]);
+
   const toggleHabitLog = async (habitId) => {
     const today = new Date().toISOString().split('T')[0];
     const existing = state.todayLogs.find(l => l.habit_id === habitId);
@@ -177,6 +203,8 @@ export function HabitProvider({ children }) {
       toggleHabitLog,
       getStreak,
       fetchHabits,
+      fetchLogsForDate,
+      getLogsForDate,
     }}>
       {children}
     </HabitContext.Provider>

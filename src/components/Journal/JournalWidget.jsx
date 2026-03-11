@@ -4,18 +4,19 @@ import { useJournal } from '../../contexts/JournalContext';
 import { useContexts } from '../../contexts/ContextContext';
 import './Journal.css';
 
-const JournalWidget = () => {
+const JournalWidget = ({ date }) => {
     const { entries, createEntry } = useJournal();
     const { activeContext } = useContexts();
     const [entry, setEntry] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    const todayEntries = useMemo(() => {
-        const today = new Date().toDateString();
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    const dateEntries = useMemo(() => {
         return entries
-            .filter(e => new Date(e.created_at).toDateString() === today)
+            .filter(e => new Date(e.created_at).toISOString().split('T')[0] === targetDate)
             .slice(0, 3);
-    }, [entries]);
+    }, [entries, targetDate]);
 
     const handleSubmit = async () => {
         if (!entry.trim() || submitting) return;
@@ -60,9 +61,9 @@ const JournalWidget = () => {
                 </div>
             </div>
 
-            {todayEntries.length > 0 && (
+            {dateEntries.length > 0 && (
                 <div className="recent-entries">
-                    {todayEntries.map(e => (
+                    {dateEntries.map(e => (
                         <div key={e.id} className="journal-entry">
                             <div className="entry-time">
                                 {new Date(e.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}

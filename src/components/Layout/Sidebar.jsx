@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
     Home,
-    Calendar as CalendarIcon,
+
     CheckSquare,
     Book,
     Settings,
@@ -19,7 +19,6 @@ const Sidebar = ({ onOpenSettings }) => {
 
     const navItems = [
         { name: 'Today', path: '/today', icon: <Home size={20} /> },
-        { name: 'Calendar', path: '/calendar', icon: <CalendarIcon size={20} /> },
         { name: 'Tasks', path: '/tasks', icon: <CheckSquare size={20} /> },
         { name: 'Journal', path: '/journal', icon: <Book size={20} /> },
         { name: 'Habits', path: '/habits', icon: <Repeat size={20} /> },
