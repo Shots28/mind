@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
+import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { useTasks } from '../contexts/TaskContext';
 import { useContexts } from '../contexts/ContextContext';
 import { useHabits } from '../contexts/HabitContext';
 import TaskList from '../components/Tasks/TaskList';
+import { TaskItem } from '../components/Tasks/TaskList';
 import HabitList from '../components/Habits/HabitList';
 import HabitStats from '../components/Habits/HabitStats';
 import CalendarWidget from '../components/Calendar/CalendarWidget';
@@ -12,11 +14,29 @@ import Modal from '../components/Common/Modal';
 import './Views.css';
 
 export default function TodayView() {
-  const { mustDoTasks, upNextTasks, tasks } = useTasks();
+  const { mustDoTasks, upNextTasks, tasks, updateTask } = useTasks();
   const { activeContext } = useContexts();
   const { todayHabits } = useHabits();
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [defaultCategory, setDefaultCategory] = useState('must_do');
+  const [activeTask, setActiveTask] = useState(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleDragStart = (event) => {
+    const task = event.active.data.current?.task;
+    setActiveTask(task || null);
+  };
+
+  const handleDragEnd = (event) => {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over) return;
+    const task = active.data.current?.task;
+    if (!task) return;
+    if (task.category !== over.id) {
+      updateTask(task.id, { category: over.id });
+    }
+  };
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -95,9 +115,14 @@ export default function TodayView() {
           </div>
         )}
 
-        <TaskList title="Must Do" tasks={filteredMustDo} category="must_do" defaultDueDate={today} onAdd={() => handleAddTask('must_do')} />
-        <div style={{ height: '24px' }} />
-        <TaskList title="Up Next" tasks={filteredUpNext} category="up_next" defaultDueDate={today} onAdd={() => handleAddTask('up_next')} />
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <TaskList title="Must Do" tasks={filteredMustDo} category="must_do" defaultDueDate={today} draggable droppableId="must_do" onAdd={() => handleAddTask('must_do')} />
+          <div style={{ height: '24px' }} />
+          <TaskList title="Up Next" tasks={filteredUpNext} category="up_next" defaultDueDate={today} draggable droppableId="up_next" onAdd={() => handleAddTask('up_next')} />
+          <DragOverlay>
+            {activeTask ? <div className="drag-overlay"><TaskItem task={activeTask} /></div> : null}
+          </DragOverlay>
+        </DndContext>
       </div>
 
       <div className="today-side-column">

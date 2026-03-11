@@ -82,6 +82,15 @@ export function TaskProvider({ children }) {
       fetchTasks();
       throw error;
     }
+    // Refresh joined relations when relational fields change
+    if (updates.project_id !== undefined || updates.context_id !== undefined) {
+      const { data } = await supabase
+        .from('tasks')
+        .select('*, contexts(name, color), projects(name, color)')
+        .eq('id', id)
+        .single();
+      if (data) dispatch({ type: 'UPDATE_TASK', payload: data });
+    }
   };
 
   const toggleComplete = async (id, onComplete) => {

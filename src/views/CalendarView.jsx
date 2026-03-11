@@ -6,6 +6,7 @@ import { useContexts } from '../contexts/ContextContext';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
 import TaskForm from '../components/Tasks/TaskForm';
+import InlineDatePicker from '../components/Tasks/InlineDatePicker';
 import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Trash2, Edit3 } from 'lucide-react';
 import './CalendarView.css';
 
@@ -14,7 +15,7 @@ const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 };
 export default function CalendarView() {
   const calendar = useCalendar();
   const { events, createEvent, deleteEvent } = useEvents();
-  const { tasks } = useTasks();
+  const { tasks, updateTask } = useTasks();
   const { activeContext } = useContexts();
   const [selectedDate, setSelectedDate] = useState(null);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -129,6 +130,9 @@ export default function CalendarView() {
                     <div key={task.id} className="day-item task-item-cal" onClick={() => setEditingTask(task)}>
                       <Clock size={14} />
                       <span className={task.is_completed ? 'completed-text' : ''}>{task.title}</span>
+                      <InlineDatePicker value={task.due_date} onChange={(d) => updateTask(task.id, { due_date: d || null })}>
+                        <button className="btn-icon" onClick={(e) => e.stopPropagation()}><Calendar size={14} /></button>
+                      </InlineDatePicker>
                       <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setEditingTask(task); }}><Edit3 size={14} /></button>
                     </div>
                   ))}

@@ -1,11 +1,31 @@
 import { useState, useRef, useEffect } from 'react';
-import { Check, MoreHorizontal, AlertCircle, Trash2, Edit3, ArrowUpDown, Plus } from 'lucide-react';
+import { Check, MoreHorizontal, AlertCircle, Trash2, Edit3, ArrowUpDown, Plus, GripVertical } from 'lucide-react';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { useTasks } from '../../contexts/TaskContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { useToast } from '../Common/Toast';
 import TaskForm from './TaskForm';
 import Modal from '../Common/Modal';
+import InlineDatePicker from './InlineDatePicker';
 import './Tasks.css';
+
+const DraggableWrapper = ({ id, data, children }) => {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id, data });
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.4 : 1,
+        position: 'relative',
+    };
+    return (
+        <div ref={setNodeRef} style={style}>
+            <div className="drag-handle" {...attributes} {...listeners}>
+                <GripVertical size={14} />
+            </div>
+            {children}
+        </div>
+    );
+};
 
 const TaskItem = ({ task }) => {
     const { toggleComplete, deleteTask, updateTask } = useTasks();
@@ -56,9 +76,11 @@ const TaskItem = ({ task }) => {
                             </span>
                         )}
                         {task.due_date && (
-                            <span className="task-due-date">
-                                {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </span>
+                            <InlineDatePicker value={task.due_date} onChange={(d) => updateTask(task.id, { due_date: d || null })}>
+                                <span className="task-due-date inline-date-clickable">
+                                    {new Date(task.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                            </InlineDatePicker>
                         )}
                     </div>
                 </div>
@@ -93,7 +115,16 @@ const TaskItem = ({ task }) => {
     );
 };
 
-const TaskList = ({ tasks, title, category, defaultDueDate }) => {
+const DroppableList = ({ droppableId, children }) => {
+    const { setNodeRef, isOver } = useDroppable({ id: droppableId });
+    return (
+        <div className={`task-list ${isOver ? 'droppable-over' : ''}`} ref={setNodeRef}>
+            {children}
+        </div>
+    );
+};
+
+const TaskList = ({ tasks, title, category, defaultDueDate, draggable = false, droppableId }) => {
     const { createTask } = useTasks();
     const { activeContext } = useContexts();
     const [quickAdd, setQuickAdd] = useState('');
@@ -118,32 +149,53 @@ const TaskList = ({ tasks, title, category, defaultDueDate }) => {
         }
     };
 
+    const taskItems = tasks.map(task => (
+        draggable ? (
+            <DraggableWrapper key={task.id} id={task.id} data={{ task }}>
+                <TaskItem task={task} />
+            </DraggableWrapper>
+        ) : (
+            <TaskItem key={task.id} task={task} />
+        )
+    ));
+
+    const emptyState = tasks.length === 0 && category !== 'completed' && (
+        <div className="task-list-empty">No tasks yet</div>
+    );
+
+    const quickAddForm = category && category !== 'completed' && (
+        <form className="quick-add-form" onSubmit={handleQuickAdd}>
+            <Plus size={16} className="quick-add-icon" />
+            <input
+                type="text"
+                className="quick-add-input"
+                placeholder="Add a task..."
+                value={quickAdd}
+                onChange={(e) => setQuickAdd(e.target.value)}
+                disabled={adding}
+            />
+        </form>
+    );
+
     return (
         <div className="task-list-container">
             {title && <h3 className="section-title">{title}</h3>}
-            <div className="task-list">
-                {tasks.length === 0 && category !== 'completed' && (
-                    <div className="task-list-empty">No tasks yet</div>
-                )}
-                {tasks.map(task => (
-                    <TaskItem key={task.id} task={task} />
-                ))}
-                {category && category !== 'completed' && (
-                    <form className="quick-add-form" onSubmit={handleQuickAdd}>
-                        <Plus size={16} className="quick-add-icon" />
-                        <input
-                            type="text"
-                            className="quick-add-input"
-                            placeholder="Add a task..."
-                            value={quickAdd}
-                            onChange={(e) => setQuickAdd(e.target.value)}
-                            disabled={adding}
-                        />
-                    </form>
-                )}
-            </div>
+            {draggable ? (
+                <DroppableList droppableId={droppableId || category}>
+                    {emptyState}
+                    {taskItems}
+                    {quickAddForm}
+                </DroppableList>
+            ) : (
+                <div className="task-list">
+                    {emptyState}
+                    {taskItems}
+                    {quickAddForm}
+                </div>
+            )}
         </div>
     );
 };
 
+export { TaskItem };
 export default TaskList;

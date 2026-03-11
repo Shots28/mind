@@ -2,12 +2,42 @@
   max-width: 800px;
 }
 
+.tasks-header-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
 .tasks-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
   gap: 16px;
+}
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel-bg);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  width: fit-content;
+}
+
+.date-nav-arrow {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-nav-label {
+  min-width: 140px;
+  text-align: center;
 }
 
 .tasks-filters {
