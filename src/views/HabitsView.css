@@ -1,0 +1,111 @@
+.habits-view {
+  max-width: 1000px;
+}
+
+.habits-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.habits-header .btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.habits-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+}
+
+.habits-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.habits-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.habits-section {
+  padding: 20px;
+}
+
+.habits-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+/* Manage list */
+.habits-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.habit-manage-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+
+.habit-manage-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.habit-manage-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.habit-manage-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.habit-manage-freq {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.habit-manage-context {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.habit-manage-item .btn-icon {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.habit-manage-item:hover .btn-icon {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .habits-layout {
+    grid-template-columns: 1fr;
+  }
+}

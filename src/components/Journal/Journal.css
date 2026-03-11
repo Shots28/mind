@@ -1,0 +1,77 @@
+.journal-widget {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+.journal-input-area {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 0.2s ease;
+}
+
+.journal-input-area:focus-within {
+    border-color: var(--accent-color);
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.journal-textarea {
+    background: transparent;
+    border: none;
+    resize: none;
+    min-height: 80px;
+    padding: 0;
+}
+
+.journal-textarea:focus {
+    outline: none;
+}
+
+.journal-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.journal-tools {
+    display: flex;
+    gap: 4px;
+}
+
+.journal-submit {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+}
+
+.recent-entries {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.journal-entry {
+    padding-left: 16px;
+    border-left: 2px solid var(--panel-border);
+}
+
+.entry-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.entry-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+}

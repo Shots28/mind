@@ -1,0 +1,155 @@
+/* Habit List */
+.habit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.habit-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.habit-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.habit-item.completed {
+  opacity: 0.7;
+}
+
+.habit-item.completed .habit-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.habit-toggle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  flex-shrink: 0;
+}
+
+.habit-toggle:hover {
+  transform: scale(1.1);
+}
+
+.habit-toggle.checked {
+  transform: scale(1.1);
+}
+
+.habit-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.habit-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.habit-context {
+  font-size: 12px;
+}
+
+.habit-streak {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Habit Stats */
+.habit-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.habit-stats-summary {
+  display: flex;
+  gap: 20px;
+}
+
+.habit-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.habit-stat-icon {
+  color: var(--accent-color);
+}
+
+.habit-stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.habit-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Week Chart */
+.habit-week-chart {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  height: 60px;
+}
+
+.habit-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.habit-bar-track {
+  width: 100%;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.habit-bar-fill {
+  width: 100%;
+  background: var(--accent-color);
+  border-radius: 4px;
+  min-height: 2px;
+  transition: height 0.3s ease;
+}
+
+.habit-bar-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Compact mode */
+.habit-list.compact .habit-item {
+  padding: 8px 12px;
+}
+
+.habit-stats.compact {
+  gap: 8px;
+}

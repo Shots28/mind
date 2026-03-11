@@ -1,0 +1,132 @@
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  background: var(--bg-color);
+  background-image: radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                    radial-gradient(ellipse at 80% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+  padding: 24px;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px;
+}
+
+.auth-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-logo .logo-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-color), #818cf8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: white;
+}
+
+.auth-logo .logo-text {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.auth-tab.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.input-group {
+  position: relative;
+}
+
+.input-group .input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.input-group .input-field {
+  padding-left: 42px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-submit {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.auth-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger-color);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.auth-success {
+  text-align: center;
+}
+
+.auth-success h3 {
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.auth-success p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}

@@ -1,0 +1,138 @@
+.projects-view {
+  max-width: 900px;
+}
+
+.projects-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.projects-header .btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  padding: 20px;
+  border-top: 3px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.project-card.archived {
+  opacity: 0.5;
+}
+
+.project-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.project-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.project-card-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.project-context-badge {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.project-card-stats {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.project-progress-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.project-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.project-stat-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.project-menu-wrapper {
+  position: relative;
+}
+
+.project-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 150px;
+  padding: 6px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.project-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.project-menu button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.project-menu button.danger:hover {
+  color: var(--danger-color);
+}
+
+.project-recent-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.project-recent-task {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
