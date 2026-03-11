@@ -5,7 +5,8 @@ import { useTasks } from '../contexts/TaskContext';
 import { useContexts } from '../contexts/ContextContext';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Trash2 } from 'lucide-react';
+import TaskForm from '../components/Tasks/TaskForm';
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Trash2, Edit3 } from 'lucide-react';
 import './CalendarView.css';
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -18,6 +19,7 @@ export default function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', all_day: true });
+  const [editingTask, setEditingTask] = useState(null);
 
   const filteredEvents = useMemo(() => {
     if (activeContext === 'all') return events;
@@ -124,9 +126,10 @@ export default function CalendarView() {
                     </div>
                   ))}
                   {selectedDayTasks.map(task => (
-                    <div key={task.id} className="day-item task-item-cal">
+                    <div key={task.id} className="day-item task-item-cal" onClick={() => setEditingTask(task)}>
                       <Clock size={14} />
                       <span className={task.is_completed ? 'completed-text' : ''}>{task.title}</span>
+                      <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setEditingTask(task); }}><Edit3 size={14} /></button>
                     </div>
                   ))}
                 </div>
@@ -157,6 +160,10 @@ export default function CalendarView() {
             </label>
             <button type="submit" className="btn-primary" style={{ width: '100%' }}>Create Event</button>
           </form>
+        </Modal>
+
+        <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Edit Task">
+          <TaskForm task={editingTask} onClose={() => setEditingTask(null)} />
         </Modal>
       </div>
     </div>

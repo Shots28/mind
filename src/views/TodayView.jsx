@@ -18,17 +18,19 @@ export default function TodayView() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [defaultCategory, setDefaultCategory] = useState('must_do');
 
+  const today = new Date().toISOString().split('T')[0];
+
   const filteredMustDo = useMemo(() => {
-    if (activeContext === 'all') return mustDoTasks;
-    return mustDoTasks.filter(t => t.context_id === activeContext);
-  }, [mustDoTasks, activeContext]);
+    let filtered = mustDoTasks.filter(t => !t.due_date || t.due_date <= today);
+    if (activeContext !== 'all') filtered = filtered.filter(t => t.context_id === activeContext);
+    return filtered;
+  }, [mustDoTasks, activeContext, today]);
 
   const filteredUpNext = useMemo(() => {
-    if (activeContext === 'all') return upNextTasks;
-    return upNextTasks.filter(t => t.context_id === activeContext);
-  }, [upNextTasks, activeContext]);
-
-  const today = new Date().toISOString().split('T')[0];
+    let filtered = upNextTasks.filter(t => !t.due_date || t.due_date <= today);
+    if (activeContext !== 'all') filtered = filtered.filter(t => t.context_id === activeContext);
+    return filtered;
+  }, [upNextTasks, activeContext, today]);
   const progress = useMemo(() => {
     const relevantTasks = activeContext === 'all' ? tasks : tasks.filter(t => t.context_id === activeContext);
     const todayCompleted = relevantTasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(today)).length;

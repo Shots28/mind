@@ -53,9 +53,23 @@
   line-height: 1.5;
 }
 
+.project-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .project-context-badge {
   font-size: 12px;
   font-weight: 500;
+}
+
+.project-due-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .project-card-stats {
@@ -63,12 +77,24 @@
   padding-top: 12px;
 }
 
+.project-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.project-task-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .project-progress-bar {
   height: 4px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
   overflow: hidden;
-  margin-bottom: 8px;
 }
 
 .project-progress-fill {
@@ -131,8 +157,43 @@
 .project-recent-task {
   font-size: 13px;
   color: var(--text-secondary);
-  padding: 4px 0;
+  padding: 6px 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.project-recent-task:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.project-empty-tasks {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  font-style: italic;
+}
+
+.project-view-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 0;
+  font-family: var(--font-family);
+  text-align: left;
+  transition: opacity 0.15s;
+}
+
+.project-view-all:hover {
+  opacity: 0.8;
 }

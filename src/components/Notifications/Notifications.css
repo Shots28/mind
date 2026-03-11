@@ -102,3 +102,37 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+.notification-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-dismiss-all {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-family);
+  transition: background 0.15s;
+}
+
+.notification-dismiss-all:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.notification-dismiss-btn {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: auto;
+}
+
+.notification-item:hover .notification-dismiss-btn {
+  opacity: 1;
+}

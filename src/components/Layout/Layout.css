@@ -245,14 +245,14 @@
 
 .search-icon {
     position: absolute;
-    left: 14px;
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-secondary);
     pointer-events: none;
 }
 
-.search-input {
+.search-container .search-input {
     padding-left: 40px;
     border-radius: 20px;
     background: rgba(0, 0, 0, 0.3);

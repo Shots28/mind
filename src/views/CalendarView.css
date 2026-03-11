@@ -166,6 +166,15 @@
   color: var(--accent-color);
 }
 
+.task-item-cal {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.task-item-cal:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .task-item-cal svg {
   color: var(--success-color);
 }

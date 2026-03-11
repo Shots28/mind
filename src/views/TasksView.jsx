@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTasks } from '../contexts/TaskContext';
 import { useContexts } from '../contexts/ContextContext';
 import { useProjects } from '../contexts/ProjectContext';
@@ -13,24 +14,29 @@ export default function TasksView() {
   const { mustDoTasks, upNextTasks, completedTasks } = useTasks();
   const { activeContext } = useContexts();
   const { projects } = useProjects();
+  const [searchParams] = useSearchParams();
+  const projectFilter = searchParams.get('project');
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [filter, setFilter] = useState('active');
   const [groupBy, setGroupBy] = useState('category');
 
   const filteredMustDo = useMemo(() => {
-    if (activeContext === 'all') return mustDoTasks;
-    return mustDoTasks.filter(t => t.context_id === activeContext);
-  }, [mustDoTasks, activeContext]);
+    let filtered = activeContext === 'all' ? mustDoTasks : mustDoTasks.filter(t => t.context_id === activeContext);
+    if (projectFilter) filtered = filtered.filter(t => t.project_id === projectFilter);
+    return filtered;
+  }, [mustDoTasks, activeContext, projectFilter]);
 
   const filteredUpNext = useMemo(() => {
-    if (activeContext === 'all') return upNextTasks;
-    return upNextTasks.filter(t => t.context_id === activeContext);
-  }, [upNextTasks, activeContext]);
+    let filtered = activeContext === 'all' ? upNextTasks : upNextTasks.filter(t => t.context_id === activeContext);
+    if (projectFilter) filtered = filtered.filter(t => t.project_id === projectFilter);
+    return filtered;
+  }, [upNextTasks, activeContext, projectFilter]);
 
   const filteredCompleted = useMemo(() => {
-    if (activeContext === 'all') return completedTasks;
-    return completedTasks.filter(t => t.context_id === activeContext);
-  }, [completedTasks, activeContext]);
+    let filtered = activeContext === 'all' ? completedTasks : completedTasks.filter(t => t.context_id === activeContext);
+    if (projectFilter) filtered = filtered.filter(t => t.project_id === projectFilter);
+    return filtered;
+  }, [completedTasks, activeContext, projectFilter]);
 
   const allActive = useMemo(() => [...filteredMustDo, ...filteredUpNext], [filteredMustDo, filteredUpNext]);
 

@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProjects } from '../contexts/ProjectContext';
 import { useTasks } from '../contexts/TaskContext';
 import { useContexts } from '../contexts/ContextContext';
+import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
-import { Plus, FolderOpen, MoreHorizontal, Trash2, Edit3, Archive } from 'lucide-react';
+import { Plus, FolderOpen, MoreHorizontal, Trash2, Edit3, Archive, Clock, ArrowRight } from 'lucide-react';
 import './ProjectsView.css';
 
 function ProjectForm({ onClose, project = null, contexts }) {
@@ -60,12 +62,13 @@ function ProjectForm({ onClose, project = null, contexts }) {
 export default function ProjectsView() {
   const { projects, loading, deleteProject, updateProject } = useProjects();
   const { tasks } = useTasks();
-  const { contexts } = useContexts();
+  const { contexts, activeContext } = useContexts();
+  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
   const menuRef = useRef(null);
-  const { activeContext } = useContexts();
 
   useEffect(() => {
     if (menuOpen === null) return;
@@ -79,7 +82,10 @@ export default function ProjectsView() {
   const getProjectStats = (projectId) => {
     const projectTasks = tasks.filter(t => t.project_id === projectId);
     const completed = projectTasks.filter(t => t.is_completed).length;
-    return { total: projectTasks.length, completed, percent: projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0 };
+    const activeTasks = projectTasks.filter(t => !t.is_completed);
+    const withDue = activeTasks.filter(t => t.due_date).sort((a, b) => a.due_date.localeCompare(b.due_date));
+    const nearestDue = withDue.length > 0 ? withDue[0].due_date : null;
+    return { total: projectTasks.length, completed, percent: projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0, nearestDue };
   };
 
   const allActive = projects.filter(p => p.status === 'active');
@@ -102,6 +108,7 @@ export default function ProjectsView() {
         <div className="projects-grid">
           {activeProjects.map(project => {
             const stats = getProjectStats(project.id);
+            const recentTasks = tasks.filter(t => t.project_id === project.id && !t.is_completed).slice(0, 3);
             return (
               <div key={project.id} className="project-card glass-panel" style={{ borderTopColor: project.color }}>
                 <div className="project-card-header">
@@ -126,23 +133,38 @@ export default function ProjectsView() {
                   </div>
                 </div>
                 {project.description && <p className="project-card-desc">{project.description}</p>}
-                {project.contexts && <span className="project-context-badge" style={{ color: project.contexts.color }}>{project.contexts.name}</span>}
+                <div className="project-card-meta">
+                  {project.contexts && <span className="project-context-badge" style={{ color: project.contexts.color }}>{project.contexts.name}</span>}
+                  {stats.nearestDue && (
+                    <span className="project-due-date">
+                      <Clock size={12} />
+                      {new Date(stats.nearestDue + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </div>
                 <div className="project-card-stats">
+                  <div className="project-stat-row">
+                    <span className="project-task-count">{stats.total} task{stats.total !== 1 ? 's' : ''}</span>
+                    <span className="project-stat-text">{stats.completed} done</span>
+                  </div>
                   <div className="project-progress-bar">
                     <div className="project-progress-fill" style={{ width: `${stats.percent}%`, background: project.color }} />
                   </div>
-                  <span className="project-stat-text">{stats.completed}/{stats.total} tasks</span>
                 </div>
-                {(() => {
-                  const recentTasks = tasks.filter(t => t.project_id === project.id && !t.is_completed).slice(0, 3);
-                  return recentTasks.length > 0 && (
-                    <div className="project-recent-tasks">
-                      {recentTasks.map(t => (
-                        <div key={t.id} className="project-recent-task">{t.title}</div>
-                      ))}
-                    </div>
-                  );
-                })()}
+                {recentTasks.length > 0 ? (
+                  <div className="project-recent-tasks">
+                    {recentTasks.map(t => (
+                      <div key={t.id} className="project-recent-task" onClick={() => setEditingTask(t)}>
+                        {t.title}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="project-empty-tasks">No active tasks</div>
+                )}
+                <button className="project-view-all" onClick={() => navigate(`/tasks?project=${project.id}`)}>
+                  View all tasks <ArrowRight size={14} />
+                </button>
               </div>
             );
           })}
@@ -167,6 +189,10 @@ export default function ProjectsView() {
 
       <Modal isOpen={showForm} onClose={() => { setShowForm(false); setEditingProject(null); }} title={editingProject ? 'Edit Project' : 'New Project'}>
         <ProjectForm onClose={() => { setShowForm(false); setEditingProject(null); }} project={editingProject} contexts={contexts} />
+      </Modal>
+
+      <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Edit Task">
+        <TaskForm task={editingTask} onClose={() => setEditingTask(null)} />
       </Modal>
     </div>
   );
