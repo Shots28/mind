@@ -95,9 +95,9 @@ export default function TodayView() {
           </div>
         )}
 
-        <TaskList title="Must Do" tasks={filteredMustDo} category="must_do" onAdd={() => handleAddTask('must_do')} />
+        <TaskList title="Must Do" tasks={filteredMustDo} category="must_do" defaultDueDate={today} onAdd={() => handleAddTask('must_do')} />
         <div style={{ height: '24px' }} />
-        <TaskList title="Up Next" tasks={filteredUpNext} category="up_next" onAdd={() => handleAddTask('up_next')} />
+        <TaskList title="Up Next" tasks={filteredUpNext} category="up_next" defaultDueDate={today} onAdd={() => handleAddTask('up_next')} />
       </div>
 
       <div className="today-side-column">
@@ -106,7 +106,7 @@ export default function TodayView() {
       </div>
 
       <Modal isOpen={showTaskForm} onClose={() => setShowTaskForm(false)} title="New Task">
-        <TaskForm defaultCategory={defaultCategory} defaultContextId={activeContext !== 'all' ? activeContext : ''} onClose={() => setShowTaskForm(false)} />
+        <TaskForm defaultCategory={defaultCategory} defaultContextId={activeContext !== 'all' ? activeContext : ''} defaultDueDate={today} onClose={() => setShowTaskForm(false)} />
       </Modal>
     </div>
   );

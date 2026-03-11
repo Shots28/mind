@@ -5,7 +5,7 @@ import { useProjects } from '../../contexts/ProjectContext';
 import DatePicker from '../Common/DatePicker';
 import './TaskForm.css';
 
-export default function TaskForm({ task = null, defaultCategory = 'must_do', defaultContextId = '', onClose }) {
+export default function TaskForm({ task = null, defaultCategory = 'must_do', defaultContextId = '', defaultDueDate = '', onClose }) {
   const { createTask, updateTask } = useTasks();
   const { contexts } = useContexts();
   const { projects } = useProjects();
@@ -15,7 +15,7 @@ export default function TaskForm({ task = null, defaultCategory = 'must_do', def
   const [category, setCategory] = useState(task?.category || defaultCategory);
   const [contextId, setContextId] = useState(task?.context_id || defaultContextId);
   const [projectId, setProjectId] = useState(task?.project_id || '');
-  const [dueDate, setDueDate] = useState(task?.due_date || '');
+  const [dueDate, setDueDate] = useState(task?.due_date || defaultDueDate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 

@@ -93,7 +93,7 @@ const TaskItem = ({ task }) => {
     );
 };
 
-const TaskList = ({ tasks, title, category }) => {
+const TaskList = ({ tasks, title, category, defaultDueDate }) => {
     const { createTask } = useTasks();
     const { activeContext } = useContexts();
     const [quickAdd, setQuickAdd] = useState('');
@@ -108,6 +108,7 @@ const TaskList = ({ tasks, title, category }) => {
                 title: quickAdd.trim(),
                 category: category || 'up_next',
                 context_id: activeContext !== 'all' ? activeContext : null,
+                due_date: defaultDueDate || null,
             });
             setQuickAdd('');
         } catch (err) {
