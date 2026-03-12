@@ -95,9 +95,41 @@
   opacity: 1;
 }
 
+.journal-entry-body {
+  min-height: 24px;
+  overflow: hidden;
+  position: relative;
+  transition: max-height 0.25s ease;
+}
+
+.journal-entry-body.clamped {
+  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+}
+
 .journal-entry-content {
   font-size: 14px;
   color: var(--text-primary);
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.journal-expand-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 4px;
+  font-family: var(--font-family);
+  transition: opacity 0.15s;
+}
+
+.journal-expand-btn:hover {
+  opacity: 0.8;
 }
