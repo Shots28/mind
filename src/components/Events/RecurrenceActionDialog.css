@@ -1,0 +1,58 @@
+.recurrence-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.recurrence-dialog {
+  padding: 24px;
+  border-radius: 14px;
+  max-width: 360px;
+  width: 90%;
+}
+
+.recurrence-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.recurrence-dialog-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.recurrence-dialog-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.recurrence-dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recurrence-dialog-btn {
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font-family);
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  transition: all 0.15s;
+}
+
+.recurrence-dialog-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}

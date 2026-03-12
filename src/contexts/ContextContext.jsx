@@ -49,7 +49,7 @@ export function ContextProvider({ children }) {
     else dispatch({ type: 'SET_CONTEXTS', payload: [] });
   }, [user, fetchContexts]);
 
-  const createContext_ = async (name, color = '#6366f1') => {
+  const createContext_ = async (name, color = '#3b82f6') => {
     const { data, error } = await supabase
       .from('contexts')
       .insert({ user_id: user.id, name, color, position: state.contexts.length })

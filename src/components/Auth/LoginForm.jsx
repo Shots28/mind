@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Mail, Lock } from 'lucide-react';
 
-export default function LoginForm() {
+export default function LoginForm({ onForgotPassword }) {
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,6 +49,9 @@ export default function LoginForm() {
       </div>
       <button type="submit" className="btn-primary auth-submit" disabled={loading}>
         {loading ? 'Signing in...' : 'Sign In'}
+      </button>
+      <button type="button" className="btn-link" onClick={onForgotPassword}>
+        Forgot Password?
       </button>
     </form>
   );

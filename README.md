@@ -1,4 +1,4 @@
-# Mind
+# Zenith
 
 A personal productivity app for managing tasks, habits, journal entries, events, and projects — with optional Google Calendar sync.
 

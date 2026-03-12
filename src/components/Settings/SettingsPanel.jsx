@@ -4,19 +4,21 @@ import { useContexts } from '../../contexts/ContextContext';
 import { useCategories } from '../../contexts/CategoryContext';
 import { getUserTimezone, TIMEZONE_OPTIONS } from '../../lib/dates';
 import Modal from '../Common/Modal';
-import { LogOut, Plus, Trash2, Edit3, Check, X, Globe } from 'lucide-react';
+import GoogleCalendarSettings from './GoogleCalendarSettings';
+import { useToast } from '../Common/Toast';
+import { LogOut, Plus, Trash2, Edit3, Check, X, Globe, Lock } from 'lucide-react';
 import './SettingsPanel.css';
 
 function TimezoneSettings() {
     const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const [timezone, setTimezone] = useState(getUserTimezone());
-    const isOverridden = localStorage.getItem('mind_timezone_override') !== null;
+    const isOverridden = localStorage.getItem('zenith_timezone_override') !== null;
 
     const handleChange = (value) => {
         if (value === detectedTz) {
-            localStorage.removeItem('mind_timezone_override');
+            localStorage.removeItem('zenith_timezone_override');
         } else {
-            localStorage.setItem('mind_timezone_override', value);
+            localStorage.setItem('zenith_timezone_override', value);
         }
         setTimezone(value);
     };
@@ -44,7 +46,7 @@ function TimezoneSettings() {
             {isOverridden && timezone !== detectedTz && (
                 <button
                     className="settings-reset-btn"
-                    onClick={() => { localStorage.removeItem('mind_timezone_override'); setTimezone(detectedTz); }}
+                    onClick={() => { localStorage.removeItem('zenith_timezone_override'); setTimezone(detectedTz); }}
                 >
                     Reset to detected
                 </button>
@@ -56,12 +58,12 @@ function TimezoneSettings() {
 function ContextManager() {
     const { contexts, createContext, updateContext, deleteContext } = useContexts();
     const [newName, setNewName] = useState('');
-    const [newColor, setNewColor] = useState('#6366f1');
+    const [newColor, setNewColor] = useState('#3b82f6');
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
     const [adding, setAdding] = useState(false);
 
-    const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
+    const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
 
     const handleCreate = async (e) => {
         e.preventDefault();
@@ -211,6 +213,87 @@ function CategoryManager() {
     );
 }
 
+function ChangePasswordSection() {
+    const { updatePassword } = useAuth();
+    const { showToast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        if (newPassword.length < 6) {
+            setError('Password must be at least 6 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        setLoading(true);
+        try {
+            await updatePassword(newPassword);
+            setNewPassword('');
+            setConfirmPassword('');
+            setIsOpen(false);
+            showToast('Password updated successfully');
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!isOpen) {
+        return (
+            <div className="settings-section">
+                <h3 className="settings-section-title"><Lock size={16} /> Account</h3>
+                <button className="settings-change-password-btn" onClick={() => setIsOpen(true)}>
+                    Change Password
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="settings-section">
+            <h3 className="settings-section-title"><Lock size={16} /> Change Password</h3>
+            {error && <p className="settings-error">{error}</p>}
+            <form onSubmit={handleSubmit} className="settings-password-form">
+                <input
+                    type="password"
+                    className="input-field"
+                    placeholder="New password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                />
+                <input
+                    type="password"
+                    className="input-field"
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                />
+                <div className="settings-password-actions">
+                    <button type="button" className="btn-icon" onClick={() => { setIsOpen(false); setError(''); }} style={{ padding: '8px 16px' }}>
+                        Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={loading}>
+                        {loading ? 'Updating...' : 'Update'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
 export default function SettingsPanel({ isOpen, onClose }) {
     const { user, signOut } = useAuth();
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -244,11 +327,19 @@ export default function SettingsPanel({ isOpen, onClose }) {
 
                 <div className="settings-divider" />
 
+                <GoogleCalendarSettings />
+
+                <div className="settings-divider" />
+
                 <ContextManager />
 
                 <div className="settings-divider" />
 
                 <CategoryManager />
+
+                <div className="settings-divider" />
+
+                <ChangePasswordSection />
 
                 <div className="settings-divider" />
 

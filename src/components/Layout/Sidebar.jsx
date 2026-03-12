@@ -30,8 +30,8 @@ const Sidebar = ({ onOpenSettings }) => {
         <aside className="sidebar glass-panel">
             <div className="sidebar-header">
                 <div className="logo-container">
-                    <div className="logo-mark">M</div>
-                    <span className="logo-text">Mind</span>
+                    <div className="logo-mark">Z</div>
+                    <span className="logo-text">Zenith</span>
                 </div>
             </div>
 

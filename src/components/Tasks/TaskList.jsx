@@ -8,6 +8,7 @@ import { useCategories } from '../../contexts/CategoryContext';
 import { useToast } from '../Common/Toast';
 import TaskForm from './TaskForm';
 import Modal from '../Common/Modal';
+import ConfirmDialog from '../Common/ConfirmDialog';
 import InlineDatePicker from './InlineDatePicker';
 import './Tasks.css';
 
@@ -34,6 +35,7 @@ const TaskItem = ({ task }) => {
     const { showToast } = useToast();
     const [menuOpen, setMenuOpen] = useState(false);
     const [editing, setEditing] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const menuRef = useRef(null);
 
     const contextName = task.contexts?.name;
@@ -109,7 +111,7 @@ const TaskItem = ({ task }) => {
                                     <ArrowUpDown size={14} /><span>Move to {c.name}</span>
                                 </button>
                             ))}
-                            <button className="danger" onClick={() => { deleteTask(task.id); setMenuOpen(false); }}>
+                            <button className="danger" onClick={() => { setConfirmDelete(true); setMenuOpen(false); }}>
                                 <Trash2 size={14} /><span>Delete</span>
                             </button>
                         </div>
@@ -120,6 +122,13 @@ const TaskItem = ({ task }) => {
             <Modal isOpen={editing} onClose={() => setEditing(false)} title="Edit Task">
                 <TaskForm task={task} onClose={() => setEditing(false)} />
             </Modal>
+            <ConfirmDialog
+                isOpen={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                onConfirm={() => deleteTask(task.id)}
+                title="Delete Task"
+                message={`Are you sure you want to delete "${task.title}"?`}
+            />
         </>
     );
 };

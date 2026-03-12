@@ -70,8 +70,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 24px 32px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.05));
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.05));
+    border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .progress-info h2 {

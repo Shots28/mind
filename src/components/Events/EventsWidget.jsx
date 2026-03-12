@@ -3,6 +3,7 @@ import { Calendar, Plus, Trash2, Cloud, Lock, ChevronDown, ChevronUp, Repeat } f
 import { useEvents } from '../../contexts/EventContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { isGoogleEvent, formatTimeRange, getSyncStatusColor } from '../../lib/googleSync';
+import ConfirmDialog from '../Common/ConfirmDialog';
 import './EventsWidget.css';
 
 const MAX_VISIBLE = 5;
@@ -13,6 +14,7 @@ export default function EventsWidget({ date }) {
   const [quickAdd, setQuickAdd] = useState('');
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const dateEvents = useMemo(() => {
     if (!date) return [];
@@ -49,11 +51,13 @@ export default function EventsWidget({ date }) {
     }
   };
 
-  const handleDelete = async (event) => {
-    if (isGoogleEvent(event)) {
-      if (!confirm('This will also delete the event from Google Calendar. Continue?')) return;
-    }
-    await deleteEvent(event.id);
+  const handleDelete = (event) => {
+    setDeleteTarget(event);
+  };
+
+  const confirmDeleteEvent = async () => {
+    if (deleteTarget) await deleteEvent(deleteTarget.id);
+    setDeleteTarget(null);
   };
 
   return (
@@ -116,6 +120,13 @@ export default function EventsWidget({ date }) {
           disabled={adding}
         />
       </form>
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteEvent}
+        title="Delete Event"
+        message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.title}"?${isGoogleEvent(deleteTarget) ? ' This will also delete it from Google Calendar.' : ''}` : ''}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import JournalView from './views/JournalView';
 import ProjectsView from './views/ProjectsView';
 import HabitsView from './views/HabitsView';
 import CalendarView from './views/CalendarView';
+import ResetPasswordForm from './components/Auth/ResetPasswordForm';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ErrorBoundary from './components/Common/ErrorBoundary';
 import './App.css';
@@ -29,6 +30,7 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/today" replace /> : <AuthPage />} />
+        <Route path="/reset-password" element={<ResetPasswordForm />} />
         <Route path="/today" element={<ProtectedRoute><TodayView /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><CalendarView /></ProtectedRoute>} />
         <Route path="/tasks" element={<ProtectedRoute><TasksView /></ProtectedRoute>} />
