@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useHabits, isHabitDueOnDate } from '../../contexts/HabitContext';
 import { useContexts } from '../../contexts/ContextContext';
+import { toLocalDateString } from '../../lib/dates';
 import { Flame } from 'lucide-react';
 import './Habits.css';
 
@@ -8,7 +9,7 @@ export default function HabitList({ compact = false, date }) {
   const { habits, todayHabits, todayLogs, toggleHabitLog, getStreak, fetchLogsForDate, getLogsForDate } = useHabits();
   const { activeContext } = useContexts();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   const isToday = !date || date === today;
 
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Send } from 'lucide-react';
 import { useJournal } from '../../contexts/JournalContext';
 import { useContexts } from '../../contexts/ContextContext';
+import { toLocalDateString } from '../../lib/dates';
 import './Journal.css';
 
 const JournalWidget = ({ date }) => {
@@ -10,11 +11,11 @@ const JournalWidget = ({ date }) => {
     const [entry, setEntry] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    const targetDate = date || new Date().toISOString().split('T')[0];
+    const targetDate = date || toLocalDateString();
 
     const dateEntries = useMemo(() => {
         return entries
-            .filter(e => new Date(e.created_at).toISOString().split('T')[0] === targetDate)
+            .filter(e => toLocalDateString(new Date(e.created_at)) === targetDate)
             .slice(0, 3);
     }, [entries, targetDate]);
 

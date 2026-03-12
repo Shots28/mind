@@ -13,13 +13,14 @@ import CalendarWidget from '../components/Calendar/CalendarWidget';
 import JournalWidget from '../components/Journal/JournalWidget';
 import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
+import { toLocalDateString } from '../lib/dates';
 import './Views.css';
 
 export default function TodayView() {
   const { mustDoTasks, upNextTasks, tasks, updateTask } = useTasks();
   const { activeContext } = useContexts();
   const { habits } = useHabits();
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   const [selectedDate, setSelectedDate] = useState(today);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [defaultCategory, setDefaultCategory] = useState('must_do');
@@ -31,7 +32,7 @@ export default function TodayView() {
   const shiftDate = (dir) => {
     const d = new Date(selectedDate + 'T12:00:00');
     d.setDate(d.getDate() + dir);
-    setSelectedDate(d.toISOString().split('T')[0]);
+    setSelectedDate(toLocalDateString(d));
   };
 
   const dateLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', {

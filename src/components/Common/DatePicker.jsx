@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Calendar, X } from 'lucide-react';
+import { toLocalDateString } from '../../lib/dates';
 import './DatePicker.css';
 
 export default function DatePicker({ value, onChange, placeholder = 'Select date' }) {
@@ -69,7 +70,7 @@ export default function DatePicker({ value, onChange, placeholder = 'Select date
 
   const handleSelect = (day) => {
     const date = new Date(viewYear, viewMonth, day);
-    onChange(date.toISOString().split('T')[0]);
+    onChange(toLocalDateString(date));
     setIsOpen(false);
   };
 
@@ -79,7 +80,7 @@ export default function DatePicker({ value, onChange, placeholder = 'Select date
   };
 
   const handleToday = () => {
-    onChange(now.toISOString().split('T')[0]);
+    onChange(toLocalDateString(now));
     setIsOpen(false);
   };
 
@@ -87,7 +88,7 @@ export default function DatePicker({ value, onChange, placeholder = 'Select date
     ? new Date(value + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '';
 
-  const todayString = now.toISOString().split('T')[0];
+  const todayString = toLocalDateString(now);
 
   const dropdown = isOpen ? createPortal(
     <div ref={dropdownRef} className="datepicker-dropdown glass-panel" style={{ position: 'fixed', top: 0, left: 0 }}>

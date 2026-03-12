@@ -9,6 +9,7 @@ import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
 import { Plus, CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toLocalDateString } from '../lib/dates';
 import './TasksView.css';
 
 export default function TasksView() {
@@ -27,7 +28,7 @@ export default function TasksView() {
   const shiftDate = (dir) => {
     const d = dateFilter ? new Date(dateFilter + 'T12:00:00') : new Date();
     d.setDate(d.getDate() + dir);
-    setDateFilter(d.toISOString().split('T')[0]);
+    setDateFilter(toLocalDateString(d));
   };
 
   const filteredMustDo = useMemo(() => {
@@ -119,7 +120,7 @@ export default function TasksView() {
           <button className="btn-icon date-nav-arrow" onClick={() => shiftDate(-1)}><ChevronLeft size={16} /></button>
           <button
             className={`filter-btn date-nav-label ${dateFilter ? 'active' : ''}`}
-            onClick={() => setDateFilter(new Date().toISOString().split('T')[0])}
+            onClick={() => setDateFilter(toLocalDateString())}
           >
             {dateFilter
               ? new Date(dateFilter + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })

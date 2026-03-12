@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useReducer, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { toLocalDateString } from '../lib/dates';
 import { useAuth } from './AuthContext';
 
 const TaskContext = createContext({});
@@ -111,7 +112,7 @@ export function TaskProvider({ children }) {
     }
   };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
 
   const mustDoTasks = useMemo(() =>
     sortByPriority(state.tasks.filter(t => t.category === 'must_do' && !t.is_completed)),

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { toLocalDateString } from '../lib/dates';
 import { useAuth } from './AuthContext';
 
 const HabitContext = createContext({});
@@ -77,7 +78,7 @@ export function HabitProvider({ children }) {
 
   const fetchTodayLogs = useCallback(async () => {
     if (!user) return;
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateString();
     const { data } = await supabase
       .from('habit_logs')
       .select('*')
@@ -93,8 +94,8 @@ export function HabitProvider({ children }) {
     const { data } = await supabase
       .from('habit_logs')
       .select('*')
-      .gte('date', weekAgo.toISOString().split('T')[0])
-      .lte('date', now.toISOString().split('T')[0]);
+      .gte('date', toLocalDateString(weekAgo))
+      .lte('date', toLocalDateString(now));
     if (data) dispatch({ type: 'SET_WEEK_LOGS', payload: data });
   }, [user]);
 
@@ -151,7 +152,7 @@ export function HabitProvider({ children }) {
   }, [state.dateLogs]);
 
   const toggleHabitLog = async (habitId) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateString();
     const existing = state.todayLogs.find(l => l.habit_id === habitId);
     if (existing) {
       dispatch({ type: 'REMOVE_LOG', payload: existing.id });
@@ -184,7 +185,7 @@ export function HabitProvider({ children }) {
     let streak = 0;
     const d = new Date();
     for (let i = 0; i < 30; i++) {
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(d);
       if (dates.has(dateStr)) streak++;
       else if (i > 0) break;
       d.setDate(d.getDate() - 1);

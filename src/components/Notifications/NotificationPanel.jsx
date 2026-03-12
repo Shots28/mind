@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
+import { toLocalDateString } from '../../lib/dates';
 import { Bell, AlertTriangle, Clock, CheckCircle, X } from 'lucide-react';
 import './Notifications.css';
 
@@ -17,7 +18,7 @@ export default function NotificationPanel({ isOpen, onClose }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose]);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
 
   const overdueTasks = tasks.filter(t => !t.is_completed && t.due_date && t.due_date < today);
   const dueTodayTasks = tasks.filter(t => !t.is_completed && t.due_date === today);

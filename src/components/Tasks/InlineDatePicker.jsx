@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { toLocalDateString } from '../../lib/dates';
 import '../Common/DatePicker.css';
 
 export default function InlineDatePicker({ value, onChange, children }) {
@@ -59,11 +60,11 @@ export default function InlineDatePicker({ value, onChange, children }) {
   }, [viewMonth, viewYear]);
 
   const monthName = new Date(viewYear, viewMonth).toLocaleString('default', { month: 'long' });
-  const todayString = now.toISOString().split('T')[0];
+  const todayString = toLocalDateString(now);
 
   const handleSelect = (day) => {
     const date = new Date(viewYear, viewMonth, day);
-    onChange(date.toISOString().split('T')[0]);
+    onChange(toLocalDateString(date));
     setIsOpen(false);
   };
 

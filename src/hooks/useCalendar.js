@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { toLocalDateString } from '../lib/dates';
 
 export default function useCalendar() {
   const now = new Date();
@@ -39,7 +40,7 @@ export default function useCalendar() {
       const day = i + 1;
       const date = new Date(currentYear, currentMonth, day);
       const isToday = date.toDateString() === now.toDateString();
-      return { day, date, isToday, dateString: date.toISOString().split('T')[0] };
+      return { day, date, isToday, dateString: toLocalDateString(date) };
     });
 
     return {

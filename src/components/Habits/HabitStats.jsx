@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { useHabits, isHabitDueOnDate } from '../../contexts/HabitContext';
+import { toLocalDateString } from '../../lib/dates';
 import { Flame, TrendingUp } from 'lucide-react';
 
 export default function HabitStats({ compact = false, date }) {
   const { habits, todayProgress, todayHabits, weekLogs, fetchLogsForDate, getLogsForDate } = useHabits();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateString();
   const isToday = !date || date === today;
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export default function HabitStats({ compact = false, date }) {
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(d);
       const dayLogs = weekLogs.filter(l => l.date === dateStr);
       const completed = new Set(dayLogs.map(l => l.habit_id)).size;
       days.push({
