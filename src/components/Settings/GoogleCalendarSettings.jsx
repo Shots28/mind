@@ -213,6 +213,7 @@ export default function GoogleCalendarSettings() {
       await connectGoogle();
     } catch (err) {
       showToast('Failed to start connection', { type: 'error' });
+      localStorage.removeItem('google_oauth_pending');
       console.error(err);
     }
   };
