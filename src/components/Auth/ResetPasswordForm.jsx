@@ -40,8 +40,8 @@ export default function ResetPasswordForm() {
         <div className="auth-container glass-panel">
           <div className="auth-header">
             <div className="auth-logo">
-              <div className="logo-mark">M</div>
-              <span className="logo-text">Mind</span>
+              <div className="logo-mark">Z</div>
+              <span className="logo-text">Zenith</span>
             </div>
           </div>
           <div className="auth-success">
@@ -61,8 +61,8 @@ export default function ResetPasswordForm() {
       <div className="auth-container glass-panel">
         <div className="auth-header">
           <div className="auth-logo">
-            <div className="logo-mark">M</div>
-            <span className="logo-text">Mind</span>
+            <div className="logo-mark">Z</div>
+            <span className="logo-text">Zenith</span>
           </div>
         </div>
         <h3 style={{ color: 'var(--text-primary)', marginBottom: '8px', textAlign: 'center' }}>

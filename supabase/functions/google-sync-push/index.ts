@@ -82,6 +82,22 @@ async function findTargetCalendar(
     };
   }
 
+  // 3. Fallback to any enabled calendar (handles case where no default is set)
+  const { data: anyCal } = await admin
+    .from("synced_calendars")
+    .select("google_calendar_id, google_connection_id")
+    .eq("user_id", userId)
+    .eq("is_enabled", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (anyCal) {
+    return {
+      calendarId: anyCal.google_calendar_id,
+      connectionId: anyCal.google_connection_id,
+    };
+  }
+
   return null;
 }
 

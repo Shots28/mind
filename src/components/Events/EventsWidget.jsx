@@ -3,6 +3,7 @@ import { Calendar, Plus, Trash2, Cloud, Lock, ChevronDown, ChevronUp, Repeat } f
 import { useEvents } from '../../contexts/EventContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { isGoogleEvent, formatTimeRange, getSyncStatusColor } from '../../lib/googleSync';
+import { useToast } from '../Common/Toast';
 import ConfirmDialog from '../Common/ConfirmDialog';
 import './EventsWidget.css';
 
@@ -14,6 +15,7 @@ export default function EventsWidget({ date }) {
   const [quickAdd, setQuickAdd] = useState('');
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const { showToast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const dateEvents = useMemo(() => {
@@ -44,8 +46,10 @@ export default function EventsWidget({ date }) {
         context_id: activeContext !== 'all' ? activeContext : null,
       });
       setQuickAdd('');
+      showToast('Event added');
     } catch (err) {
       console.error(err);
+      showToast('Failed to add event', { type: 'error' });
     } finally {
       setAdding(false);
     }

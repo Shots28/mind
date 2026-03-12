@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Send } from 'lucide-react';
 import { useJournal } from '../../contexts/JournalContext';
+import { useToast } from '../Common/Toast';
 import { useContexts } from '../../contexts/ContextContext';
 import { toLocalDateString } from '../../lib/dates';
 import JournalEntryCard from './JournalEntryCard';
@@ -10,6 +11,7 @@ const JournalWidget = ({ date }) => {
     const { entries, createEntry } = useJournal();
     const { activeContext } = useContexts();
     const [entry, setEntry] = useState('');
+    const { showToast } = useToast();
     const [submitting, setSubmitting] = useState(false);
 
     const targetDate = date || toLocalDateString();
@@ -26,8 +28,10 @@ const JournalWidget = ({ date }) => {
         try {
             await createEntry(entry.trim(), null, activeContext !== 'all' ? activeContext : null);
             setEntry('');
+            showToast('Thought captured');
         } catch (err) {
             console.error(err);
+            showToast('Failed to save entry', { type: 'error' });
         } finally {
             setSubmitting(false);
         }

@@ -6,6 +6,7 @@ import { getUserTimezone, TIMEZONE_OPTIONS } from '../../lib/dates';
 import Modal from '../Common/Modal';
 import GoogleCalendarSettings from './GoogleCalendarSettings';
 import { useToast } from '../Common/Toast';
+import ConfirmDialog from '../Common/ConfirmDialog';
 import { LogOut, Plus, Trash2, Edit3, Check, X, Globe, Lock } from 'lucide-react';
 import './SettingsPanel.css';
 
@@ -57,11 +58,13 @@ function TimezoneSettings() {
 
 function ContextManager() {
     const { contexts, createContext, updateContext, deleteContext } = useContexts();
+    const { showToast } = useToast();
     const [newName, setNewName] = useState('');
     const [newColor, setNewColor] = useState('#3b82f6');
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
     const [adding, setAdding] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState(null);
 
     const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
 
@@ -72,8 +75,10 @@ function ContextManager() {
         try {
             await createContext(newName.trim(), newColor);
             setNewName('');
+            showToast('Context created');
         } catch (err) {
             console.error(err);
+            showToast('Failed to create context', { type: 'error' });
         } finally {
             setAdding(false);
         }
@@ -88,6 +93,7 @@ function ContextManager() {
     return (
         <div className="context-manager">
             <h3 className="settings-section-title">Contexts</h3>
+            <p className="settings-hint">Separate areas of your life (e.g., Work, Personal). Filter by context to focus on what matters now.</p>
             <div className="context-list">
                 {contexts.map(ctx => (
                     <div key={ctx.id} className="context-item">
@@ -110,7 +116,7 @@ function ContextManager() {
                                 <span className="context-item-name">{ctx.name}</span>
                                 <div className="context-item-actions">
                                     <button className="btn-icon" onClick={() => { setEditingId(ctx.id); setEditName(ctx.name); }}><Edit3 size={14} /></button>
-                                    <button className="btn-icon" onClick={() => deleteContext(ctx.id)}><Trash2 size={14} /></button>
+                                    <button className="btn-icon" onClick={() => setDeleteTarget(ctx)}><Trash2 size={14} /></button>
                                 </div>
                             </>
                         )}
@@ -139,6 +145,13 @@ function ContextManager() {
                     </button>
                 </div>
             </form>
+            <ConfirmDialog
+                isOpen={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={() => deleteContext(deleteTarget.id)}
+                title="Delete Context"
+                message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.name}"? Tasks and events using this context will become unassigned.` : ''}
+            />
         </div>
     );
 }
@@ -148,6 +161,7 @@ function CategoryManager() {
     const [newName, setNewName] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
+    const [deleteTarget, setDeleteTarget] = useState(null);
 
     const handleAdd = (e) => {
         e.preventDefault();
@@ -165,6 +179,7 @@ function CategoryManager() {
     return (
         <div className="context-manager">
             <h3 className="settings-section-title">Task Categories</h3>
+            <p className="settings-hint">Categories determine how tasks are grouped on the Today view.</p>
             <div className="context-list">
                 {categories.map(cat => (
                     <div key={cat.id} className="context-item">
@@ -186,8 +201,8 @@ function CategoryManager() {
                                 <span className="context-item-name">{cat.name}</span>
                                 <div className="context-item-actions">
                                     <button className="btn-icon" onClick={() => { setEditingId(cat.id); setEditName(cat.name); }}><Edit3 size={14} /></button>
-                                    {!cat.isDefault && (
-                                        <button className="btn-icon" onClick={() => removeCategory(cat.id)}><Trash2 size={14} /></button>
+                                    {!cat.is_default && (
+                                        <button className="btn-icon" onClick={() => setDeleteTarget(cat)}><Trash2 size={14} /></button>
                                     )}
                                 </div>
                             </>
@@ -209,6 +224,13 @@ function CategoryManager() {
                     </button>
                 </div>
             </form>
+            <ConfirmDialog
+                isOpen={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={() => removeCategory(deleteTarget.id)}
+                title="Delete Category"
+                message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.name}"? Tasks in this category will need to be reassigned.` : ''}
+            />
         </div>
     );
 }

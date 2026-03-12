@@ -11,7 +11,7 @@ import { useToast } from '../components/Common/Toast';
 import ConfirmDialog from '../components/Common/ConfirmDialog';
 import './ProjectsView.css';
 
-function ProjectForm({ onClose, project = null, contexts }) {
+function ProjectForm({ onClose, project = null, contexts, showToast }) {
   const { createProject, updateProject } = useProjects();
   const [name, setName] = useState(project?.name || '');
   const [description, setDescription] = useState(project?.description || '');
@@ -30,8 +30,10 @@ function ProjectForm({ onClose, project = null, contexts }) {
       if (project) await updateProject(project.id, data);
       else await createProject(data);
       onClose();
+      showToast('Project saved');
     } catch (err) {
       console.error(err);
+      showToast('Failed to save project', { type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -61,7 +63,7 @@ function ProjectForm({ onClose, project = null, contexts }) {
   );
 }
 
-function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEditingProject, setShowForm, updateProject, deleteProject, toggleComplete, createTask, setEditingTask, navigate, showToast }) {
+function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEditingProject, setShowForm, updateProject, deleteProject, undoDeleteProject, toggleComplete, createTask, setEditingTask, navigate, showToast }) {
   const [quickAdd, setQuickAdd] = useState('');
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -88,8 +90,10 @@ function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEd
         context_id: project.context_id || null,
       });
       setQuickAdd('');
+      showToast('Task added');
     } catch (err) {
       console.error(err);
+      showToast('Failed to add task', { type: 'error' });
     } finally {
       setAdding(false);
     }
@@ -171,7 +175,10 @@ function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEd
       <ConfirmDialog
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        onConfirm={() => deleteProject(project.id)}
+        onConfirm={() => {
+          deleteProject(project.id, { undo: true });
+          showToast('Project deleted', { duration: 5000, action: { label: 'Undo', onClick: undoDeleteProject } });
+        }}
         title="Delete Project"
         message={`Are you sure you want to delete "${project.name}"? Tasks in this project will not be deleted.`}
       />
@@ -180,7 +187,7 @@ function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEd
 }
 
 export default function ProjectsView() {
-  const { projects, loading, deleteProject, updateProject } = useProjects();
+  const { projects, loading, deleteProject, undoDeleteProject, updateProject } = useProjects();
   const { tasks, toggleComplete, createTask } = useTasks();
   const { contexts, activeContext } = useContexts();
   const { showToast } = useToast();
@@ -214,7 +221,7 @@ export default function ProjectsView() {
       </div>
 
       {activeProjects.length === 0 && !loading ? (
-        <EmptyState icon={FolderOpen} title="No projects yet" description="Create a project to organize your tasks." action="New Project" onAction={() => setShowForm(true)} />
+        <EmptyState icon={FolderOpen} title="No projects yet" description="Group related tasks together under a project." tips={["Tip: Keep projects focused — one clear goal per project works best."]} action="New Project" onAction={() => setShowForm(true)} />
       ) : (
         <div className="projects-grid">
           {activeProjects.map(project => {
@@ -232,6 +239,7 @@ export default function ProjectsView() {
                 setShowForm={setShowForm}
                 updateProject={updateProject}
                 deleteProject={deleteProject}
+                undoDeleteProject={undoDeleteProject}
                 toggleComplete={toggleComplete}
                 createTask={createTask}
                 setEditingTask={setEditingTask}
@@ -260,7 +268,7 @@ export default function ProjectsView() {
       )}
 
       <Modal isOpen={showForm} onClose={() => { setShowForm(false); setEditingProject(null); }} title={editingProject ? 'Edit Project' : 'New Project'}>
-        <ProjectForm onClose={() => { setShowForm(false); setEditingProject(null); }} project={editingProject} contexts={contexts} />
+        <ProjectForm onClose={() => { setShowForm(false); setEditingProject(null); }} project={editingProject} contexts={contexts} showToast={showToast} />
       </Modal>
 
       <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Edit Task">

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -55,8 +55,26 @@ export function JournalProvider({ children }) {
     return data;
   };
 
-  const deleteEntry = async (id) => {
+  const pendingDeleteRef = useRef(null);
+
+  const deleteEntry = async (id, { undo: withUndo } = {}) => {
+    const entry = state.entries.find(e => e.id === id);
     dispatch({ type: 'DELETE_ENTRY', payload: id });
+
+    if (withUndo && entry) {
+      if (pendingDeleteRef.current) {
+        clearTimeout(pendingDeleteRef.current.timerId);
+        pendingDeleteRef.current.flush();
+      }
+      const flush = async () => {
+        await supabase.from('journal_entries').delete().eq('id', id);
+        pendingDeleteRef.current = null;
+      };
+      const timerId = setTimeout(flush, 5000);
+      pendingDeleteRef.current = { timerId, entry, flush };
+      return;
+    }
+
     const { error } = await supabase.from('journal_entries').delete().eq('id', id);
     if (error) {
       fetchEntries();
@@ -64,8 +82,16 @@ export function JournalProvider({ children }) {
     }
   };
 
+  const undoDeleteEntry = useCallback(() => {
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timerId);
+      dispatch({ type: 'ADD_ENTRY', payload: pendingDeleteRef.current.entry });
+      pendingDeleteRef.current = null;
+    }
+  }, []);
+
   return (
-    <JournalContext.Provider value={{ ...state, createEntry, deleteEntry, fetchEntries }}>
+    <JournalContext.Provider value={{ ...state, createEntry, deleteEntry, undoDeleteEntry, fetchEntries }}>
       {children}
     </JournalContext.Provider>
   );

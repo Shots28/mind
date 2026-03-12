@@ -7,11 +7,13 @@ import HabitStats from '../components/Habits/HabitStats';
 import Modal from '../components/Common/Modal';
 import ConfirmDialog from '../components/Common/ConfirmDialog';
 import EmptyState from '../components/Common/EmptyState';
+import { useToast } from '../components/Common/Toast';
 import { Plus, Repeat, Trash2, Edit3 } from 'lucide-react';
 import './HabitsView.css';
 
 export default function HabitsView() {
-  const { habits, loading, deleteHabit } = useHabits();
+  const { habits, loading, deleteHabit, undoDeleteHabit } = useHabits();
+  const { showToast } = useToast();
   const { activeContext } = useContexts();
   const [showForm, setShowForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState(null);
@@ -34,7 +36,7 @@ export default function HabitsView() {
             <h3 className="habits-section-title">Today's Routine</h3>
             <HabitList />
             {filtered.length === 0 && !loading && (
-              <EmptyState icon={Repeat} title="No habits yet" description="Create a habit to build your daily routine." action="New Habit" onAction={() => setShowForm(true)} />
+              <EmptyState icon={Repeat} title="No habits yet" description="Track habits to build consistency over time." tips={["Tip: Start with just 1-2 habits. You can always add more later."]} action="New Habit" onAction={() => setShowForm(true)} />
             )}
           </div>
 
@@ -77,7 +79,11 @@ export default function HabitsView() {
       <ConfirmDialog
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { deleteHabit(deleteTarget.id); setDeleteTarget(null); }}
+        onConfirm={() => {
+          deleteHabit(deleteTarget.id, { undo: true });
+          showToast('Habit deleted', { duration: 5000, action: { label: 'Undo', onClick: undoDeleteHabit } });
+          setDeleteTarget(null);
+        }}
         title="Delete Habit"
         message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.title}"? All completion history will be lost.` : ''}
       />

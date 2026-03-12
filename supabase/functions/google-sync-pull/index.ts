@@ -42,7 +42,7 @@ function googleEventToLocal(
     recurrence_rule: gEvent.recurrence?.[0] || null,
     recurring_event_id: null, // Resolved in a second pass
     original_start_date: gEvent.originalStartTime?.dateTime || gEvent.originalStartTime?.date || null,
-    is_read_only: gEvent.organizer?.self === false && !gEvent.guestsCanModify,
+    is_read_only: gEvent.organizer?.self !== true && !gEvent.guestsCanModify,
     google_event_id: gEvent.id,
     google_calendar_id: calendarId,
     google_connection_id: connectionId,

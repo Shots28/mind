@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useToast } from '../Common/Toast';
+import { useJournal } from '../../contexts/JournalContext';
 import ConfirmDialog from '../Common/ConfirmDialog';
 import './Journal.css';
 
 const MAX_HEIGHT = 150;
 
 export default function JournalEntryCard({ entry, onDelete }) {
+  const { showToast } = useToast();
+  const { undoDeleteEntry } = useJournal();
   const contentRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
@@ -45,7 +49,10 @@ export default function JournalEntryCard({ entry, onDelete }) {
       <ConfirmDialog
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        onConfirm={() => onDelete(entry.id)}
+        onConfirm={() => {
+          onDelete(entry.id, { undo: true });
+          showToast('Entry deleted', { duration: 5000, action: { label: 'Undo', onClick: undoDeleteEntry } });
+        }}
         title="Delete Entry"
         message="Are you sure you want to delete this journal entry?"
       />

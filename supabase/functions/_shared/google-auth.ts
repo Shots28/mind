@@ -2,6 +2,17 @@ import { getSupabaseAdmin } from "./supabase-admin.ts";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
+function releaseLock(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  connectionId: string,
+) {
+  admin
+    .from("google_connections")
+    .update({ token_refresh_lock: null })
+    .eq("id", connectionId)
+    .then(() => {});
+}
+
 export async function getValidAccessToken(
   connectionId: string,
 ): Promise<string> {
@@ -24,31 +35,43 @@ export async function getValidAccessToken(
     return connection.access_token;
   }
 
-  // Try to acquire refresh lock (mutex)
-  const { data: locked, error: lockErr } = await admin
-    .from("google_connections")
-    .update({ token_refresh_lock: new Date().toISOString() })
-    .eq("id", connectionId)
-    .or(
-      "token_refresh_lock.is.null,token_refresh_lock.lt." +
-        new Date(Date.now() - 30_000).toISOString(),
-    )
-    .select("id")
-    .maybeSingle();
-
-  if (lockErr || !locked) {
-    // Another function is refreshing -- wait briefly and re-read
-    await new Promise((r) => setTimeout(r, 2000));
-    const { data: refreshed } = await admin
+  // Try to acquire refresh lock (mutex) -- best-effort
+  let hasLock = false;
+  try {
+    const { data: locked } = await admin
       .from("google_connections")
-      .select("access_token")
+      .update({ token_refresh_lock: new Date().toISOString() })
       .eq("id", connectionId)
-      .single();
-    if (refreshed) return refreshed.access_token;
-    throw new Error("Failed to get refreshed token");
+      .or(
+        "token_refresh_lock.is.null,token_refresh_lock.lt." +
+          new Date(Date.now() - 30_000).toISOString(),
+      )
+      .select("id")
+      .maybeSingle();
+
+    if (locked) {
+      hasLock = true;
+    } else {
+      // Another function may be refreshing -- wait briefly and re-read
+      await new Promise((r) => setTimeout(r, 2000));
+      const { data: refreshed } = await admin
+        .from("google_connections")
+        .select("access_token, token_expires_at")
+        .eq("id", connectionId)
+        .single();
+      if (refreshed) {
+        const newExpiry = new Date(refreshed.token_expires_at);
+        if (newExpiry > fiveMinFromNow) {
+          return refreshed.access_token;
+        }
+      }
+      // Token still expired after wait -- proceed with refresh anyway
+    }
+  } catch {
+    // Lock mechanism failed (e.g. column missing) -- proceed without lock
   }
 
-  // We have the lock -- refresh the token
+  // Refresh the token
   try {
     const response = await fetch(GOOGLE_TOKEN_URL, {
       method: "POST",
@@ -68,36 +91,31 @@ export async function getValidAccessToken(
       if (tokens.error === "invalid_grant") {
         await admin
           .from("google_connections")
-          .update({
-            is_active: false,
-            token_refresh_lock: null,
-            updated_at: new Date().toISOString(),
-          })
+          .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq("id", connectionId);
       }
+      if (hasLock) releaseLock(admin, connectionId);
       throw new Error(`Token refresh failed: ${tokens.error}`);
     }
 
     // Store new tokens
+    const updateData: Record<string, unknown> = {
+      access_token: tokens.access_token,
+      token_expires_at: new Date(
+        Date.now() + tokens.expires_in * 1000,
+      ).toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (hasLock) updateData.token_refresh_lock = null;
+
     await admin
       .from("google_connections")
-      .update({
-        access_token: tokens.access_token,
-        token_expires_at: new Date(
-          Date.now() + tokens.expires_in * 1000,
-        ).toISOString(),
-        token_refresh_lock: null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", connectionId);
 
     return tokens.access_token;
   } catch (err) {
-    // Release lock on error
-    await admin
-      .from("google_connections")
-      .update({ token_refresh_lock: null })
-      .eq("id", connectionId);
+    if (hasLock) releaseLock(admin, connectionId);
     throw err;
   }
 }

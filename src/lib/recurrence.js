@@ -63,6 +63,7 @@ export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences
     ? new Date(event.end_date) - eventStart
     : 0;
 
+  const exceptions = new Set(event.exceptions || []);
   const instances = [];
   let current = new Date(eventStart);
   let occurrenceCount = 0;
@@ -77,6 +78,12 @@ export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences
     let matches = true;
     if (byDay && freq === 'WEEKLY') {
       matches = matchesByDay(current, byDay);
+    }
+
+    // Skip dates that are in the exceptions list
+    const dateStr = current.toISOString().substring(0, 10);
+    if (exceptions.has(dateStr)) {
+      matches = false;
     }
 
     if (matches && current >= rStart) {

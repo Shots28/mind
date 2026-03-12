@@ -30,7 +30,7 @@ const DraggableWrapper = ({ id, data, children }) => {
 };
 
 const TaskItem = ({ task }) => {
-    const { toggleComplete, deleteTask, updateTask } = useTasks();
+    const { toggleComplete, deleteTask, undoDelete, updateTask } = useTasks();
     const { categories } = useCategories();
     const { showToast } = useToast();
     const [menuOpen, setMenuOpen] = useState(false);
@@ -125,7 +125,10 @@ const TaskItem = ({ task }) => {
             <ConfirmDialog
                 isOpen={confirmDelete}
                 onClose={() => setConfirmDelete(false)}
-                onConfirm={() => deleteTask(task.id)}
+                onConfirm={() => {
+                    deleteTask(task.id, { undo: true });
+                    showToast('Task deleted', { duration: 5000, action: { label: 'Undo', onClick: undoDelete } });
+                }}
                 title="Delete Task"
                 message={`Are you sure you want to delete "${task.title}"?`}
             />
@@ -145,6 +148,7 @@ const DroppableList = ({ droppableId, children }) => {
 const TaskList = ({ tasks, title, category, defaultDueDate, draggable = false, droppableId, collapsible = true }) => {
     const { createTask } = useTasks();
     const { activeContext } = useContexts();
+    const { showToast } = useToast();
     const [quickAdd, setQuickAdd] = useState('');
     const [adding, setAdding] = useState(false);
     const [collapsed, setCollapsed] = useState(false);
@@ -161,8 +165,10 @@ const TaskList = ({ tasks, title, category, defaultDueDate, draggable = false, d
                 due_date: defaultDueDate || null,
             });
             setQuickAdd('');
+            showToast('Task added');
         } catch (err) {
             console.error(err);
+            showToast('Failed to add task', { type: 'error' });
         } finally {
             setAdding(false);
         }

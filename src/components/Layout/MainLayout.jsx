@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import TopBar from './TopBar';
@@ -7,6 +7,14 @@ import './Layout.css';
 
 const MainLayout = ({ children }) => {
     const [showSettings, setShowSettings] = useState(false);
+
+    // Auto-open settings when redirected from Google OAuth
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('google_connected') === 'true' || params.get('google_error')) {
+            setShowSettings(true);
+        }
+    }, []);
 
     return (
         <div className="main-layout">

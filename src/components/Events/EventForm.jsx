@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useContexts } from '../../contexts/ContextContext';
 import { useGoogleSync } from '../../contexts/GoogleSyncContext';
 import { Calendar, Clock, MapPin, AlignLeft, Repeat, Cloud, Lock } from 'lucide-react';
+import { useToast } from '../Common/Toast';
 import RecurrenceSelector from './RecurrenceSelector';
 import './EventForm.css';
 
@@ -35,6 +36,7 @@ export default function EventForm({ initialData, date, onSubmit, onCancel, isRea
   const [location, setLocation] = useState(initialData?.location || '');
   const [contextId, setContextId] = useState(initialData?.context_id || (activeContext !== 'all' ? activeContext : null));
   const [recurrenceRule, setRecurrenceRule] = useState(initialData?.recurrence_rule || '');
+  const { showToast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(
     !!(initialData?.description || initialData?.location || initialData?.recurrence_rule)
@@ -73,6 +75,7 @@ export default function EventForm({ initialData, date, onSubmit, onCancel, isRea
       await onSubmit(eventData);
     } catch (err) {
       console.error(err);
+      showToast('Failed to save event', { type: 'error' });
     } finally {
       setSubmitting(false);
     }

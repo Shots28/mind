@@ -12,6 +12,8 @@ import InlineDatePicker from '../components/Tasks/InlineDatePicker';
 import { toLocalDateString } from '../lib/dates';
 import { isGoogleEvent, formatTimeRange } from '../lib/googleSync';
 import RecurrenceActionDialog from '../components/Events/RecurrenceActionDialog';
+import ConfirmDialog from '../components/Common/ConfirmDialog';
+import { useToast } from '../components/Common/Toast';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, Clock,
   Trash2, Edit3, Check, CheckSquare, Cloud, Lock, Repeat
@@ -114,6 +116,7 @@ export default function CalendarView() {
   const { tasks, createTask, updateTask, toggleComplete } = useTasks();
   const { activeContext } = useContexts();
   const { categories } = useCategories();
+  const { showToast } = useToast();
   const [selectedDate, setSelectedDate] = useState(toLocalDateString(new Date()));
   const [viewMode, setViewMode] = useState('month');
   const [showEventForm, setShowEventForm] = useState(false);
@@ -122,6 +125,7 @@ export default function CalendarView() {
   const [editingTask, setEditingTask] = useState(null);
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
   const [recurrenceAction, setRecurrenceAction] = useState(null); // { event, action: 'edit'|'delete' }
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Compute visible date range for recurrence expansion
   const visibleRange = useMemo(() => {
@@ -205,12 +209,15 @@ export default function CalendarView() {
     }
   };
 
-  const confirmAndDelete = async (event) => {
-    if (isGoogleEvent(event)) {
-      if (!confirm('This will also delete the event from Google Calendar. Continue?')) return;
-    }
-    const eventId = event._parentId || event.id;
+  const confirmAndDelete = (event) => {
+    setDeleteTarget(event);
+  };
+
+  const executeDelete = async () => {
+    if (!deleteTarget) return;
+    const eventId = deleteTarget._parentId || deleteTarget.id;
     await deleteEvent(eventId);
+    setDeleteTarget(null);
   };
 
   const handleRecurrenceChoice = async (choice) => {
@@ -231,9 +238,14 @@ export default function CalendarView() {
       if (choice === 'all') {
         await confirmAndDelete({ ...event, id: masterId });
       } else {
-        // For "this event only", delete the master (simplified — full exception support would need more DB work)
-        // For now, we delete the whole series with a note
-        await confirmAndDelete({ ...event, id: masterId });
+        // Add this date as an exception to the recurring event
+        const exceptionDate = event.start_date.substring(0, 10);
+        const masterEvent = events.find(e => e.id === masterId);
+        const currentExceptions = masterEvent?.exceptions || [];
+        await updateEvent(masterId, {
+          exceptions: [...currentExceptions, exceptionDate],
+        });
+        showToast('Instance removed');
       }
     }
     setRecurrenceAction(null);
@@ -250,8 +262,10 @@ export default function CalendarView() {
         context_id: activeContext !== 'all' ? activeContext : null,
       });
       setQuickTaskTitle('');
+      showToast('Task added');
     } catch (err) {
       console.error(err);
+      showToast('Failed to add task', { type: 'error' });
     }
   };
 
@@ -600,6 +614,14 @@ export default function CalendarView() {
           onCancel={() => setRecurrenceAction(null)}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={executeDelete}
+        title="Delete Event"
+        message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.title}"?${isGoogleEvent(deleteTarget) ? ' This will also delete it from Google Calendar.' : ''}` : ''}
+      />
     </div>
   );
 }

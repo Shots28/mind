@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useReducer, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useReducer, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { toLocalDateString } from '../lib/dates';
 import { useAuth } from './AuthContext';
@@ -131,11 +131,37 @@ export function HabitProvider({ children }) {
     if (error) { fetchHabits(); throw error; }
   };
 
-  const deleteHabit = async (id) => {
+  const pendingDeleteRef = useRef(null);
+
+  const deleteHabit = async (id, { undo: withUndo } = {}) => {
+    const habit = state.habits.find(h => h.id === id);
     dispatch({ type: 'DELETE_HABIT', payload: id });
+
+    if (withUndo && habit) {
+      if (pendingDeleteRef.current) {
+        clearTimeout(pendingDeleteRef.current.timerId);
+        pendingDeleteRef.current.flush();
+      }
+      const flush = async () => {
+        await supabase.from('habits').delete().eq('id', id);
+        pendingDeleteRef.current = null;
+      };
+      const timerId = setTimeout(flush, 5000);
+      pendingDeleteRef.current = { timerId, habit, flush };
+      return;
+    }
+
     const { error } = await supabase.from('habits').delete().eq('id', id);
     if (error) { fetchHabits(); throw error; }
   };
+
+  const undoDeleteHabit = useCallback(() => {
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timerId);
+      dispatch({ type: 'ADD_HABIT', payload: pendingDeleteRef.current.habit });
+      pendingDeleteRef.current = null;
+    }
+  }, []);
 
   const fetchLogsForDate = useCallback(async (dateStr) => {
     if (!user) return;
@@ -221,6 +247,7 @@ export function HabitProvider({ children }) {
       createHabit,
       updateHabit,
       deleteHabit,
+      undoDeleteHabit,
       toggleHabitLog,
       getStreak,
       fetchHabits,

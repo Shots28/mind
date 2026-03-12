@@ -27,6 +27,20 @@
   line-height: 1.5;
 }
 
+.empty-state-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.empty-state-tip {
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  line-height: 1.4;
+}
+
 .empty-state .btn-primary {
   margin-top: 8px;
 }

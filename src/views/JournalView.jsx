@@ -3,6 +3,7 @@ import { useJournal } from '../contexts/JournalContext';
 import { useContexts } from '../contexts/ContextContext';
 import JournalEntryCard from '../components/Journal/JournalEntryCard';
 import EmptyState from '../components/Common/EmptyState';
+import { useToast } from '../components/Common/Toast';
 import { Send, BookOpen } from 'lucide-react';
 import './JournalView.css';
 
@@ -10,6 +11,7 @@ export default function JournalView() {
   const { entries, loading, createEntry, deleteEntry } = useJournal();
   const { activeContext } = useContexts();
   const [content, setContent] = useState('');
+  const { showToast } = useToast();
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -18,8 +20,10 @@ export default function JournalView() {
     try {
       await createEntry(content.trim(), null, activeContext !== 'all' ? activeContext : null);
       setContent('');
+      showToast('Thought captured');
     } catch (err) {
       console.error(err);
+      showToast('Failed to save entry', { type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -65,7 +69,7 @@ export default function JournalView() {
 
       <div className="journal-history">
         {groupedEntries.length === 0 && !loading ? (
-          <EmptyState icon={BookOpen} title="No journal entries yet" description="Start writing to capture your thoughts." />
+          <EmptyState icon={BookOpen} title="No journal entries yet" description="Capture thoughts, reflections, and quick notes as they come." tips={["Tip: Use Ctrl+Enter to submit quickly."]} />
         ) : (
           groupedEntries.map(([date, dayEntries]) => (
             <div key={date} className="journal-day-group">

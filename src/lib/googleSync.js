@@ -3,19 +3,6 @@
  */
 
 /**
- * Format a sync status for display.
- */
-export function getSyncStatusLabel(syncStatus) {
-  switch (syncStatus) {
-    case 'synced': return 'Synced';
-    case 'pending_push': return 'Syncing...';
-    case 'pending_pull': return 'Updating...';
-    case 'local': return 'Local only';
-    default: return '';
-  }
-}
-
-/**
  * Get sync status icon color.
  */
 export function getSyncStatusColor(syncStatus) {

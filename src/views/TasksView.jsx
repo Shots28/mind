@@ -168,7 +168,8 @@ export default function TasksView() {
         <EmptyState
           icon={CheckSquare}
           title="No active tasks"
-          description="Create a task to get started."
+          description="Your task list is clear. Add tasks to plan your day."
+          tips={["Tip: Use categories to separate urgent work from everything else."]}
           action="New Task"
           onAction={() => setShowTaskForm(true)}
         />

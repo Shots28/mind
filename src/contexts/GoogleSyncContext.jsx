@@ -105,6 +105,8 @@ export function GoogleSyncProvider({ children }) {
 
   // Enable sync for a calendar
   const enableCalendar = useCallback(async (connectionId, googleCalendarId, calendarName, color, accessRole) => {
+    // Auto-set as default if no other enabled calendars exist
+    const hasEnabled = state.syncedCalendars.some(c => c.is_enabled);
     const { data, error } = await supabase.from('synced_calendars').insert({
       user_id: user.id,
       google_connection_id: connectionId,
@@ -113,6 +115,7 @@ export function GoogleSyncProvider({ children }) {
       calendar_color: color,
       access_role: accessRole || 'owner',
       is_enabled: true,
+      is_default: !hasEnabled,
     }).select().single();
     if (error) throw error;
     dispatch({ type: 'ADD_SYNCED_CALENDAR', payload: data });

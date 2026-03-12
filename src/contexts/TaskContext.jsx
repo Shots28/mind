@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useReducer, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { toLocalDateString } from '../lib/dates';
 import { useAuth } from './AuthContext';
@@ -103,14 +103,41 @@ export function TaskProvider({ children }) {
     if (is_completed && onComplete) onComplete();
   };
 
-  const deleteTask = async (id) => {
+  const pendingDeleteRef = useRef(null);
+
+  const deleteTask = async (id, { undo: withUndo } = {}) => {
+    const task = state.tasks.find(t => t.id === id);
     dispatch({ type: 'DELETE_TASK', payload: id });
+
+    if (withUndo && task) {
+      // Flush any previous pending delete immediately
+      if (pendingDeleteRef.current) {
+        clearTimeout(pendingDeleteRef.current.timerId);
+        pendingDeleteRef.current.flush();
+      }
+      const flush = async () => {
+        await supabase.from('tasks').delete().eq('id', id);
+        pendingDeleteRef.current = null;
+      };
+      const timerId = setTimeout(flush, 5000);
+      pendingDeleteRef.current = { timerId, task, flush };
+      return;
+    }
+
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) {
       fetchTasks();
       throw error;
     }
   };
+
+  const undoDelete = useCallback(() => {
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timerId);
+      dispatch({ type: 'ADD_TASK', payload: pendingDeleteRef.current.task });
+      pendingDeleteRef.current = null;
+    }
+  }, []);
 
   const mustDoTasks = useMemo(() =>
     sortByPriority(state.tasks.filter(t => t.category === 'must_do' && !t.is_completed)),
@@ -150,6 +177,7 @@ export function TaskProvider({ children }) {
       updateTask,
       toggleComplete,
       deleteTask,
+      undoDelete,
       fetchTasks,
       getTasksByCategory,
     }}>

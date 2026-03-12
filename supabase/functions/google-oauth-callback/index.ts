@@ -111,13 +111,13 @@ Deno.serve(async (req: Request) => {
   if (upsertError) {
     console.error("Upsert error:", upsertError);
     return Response.redirect(
-      `${appUrl}/settings?google_error=db_error`,
+      `${appUrl}/today?google_error=db_error`,
       302,
     );
   }
 
   return Response.redirect(
-    `${appUrl}/settings?google_connected=true`,
+    `${appUrl}/today?google_connected=true`,
     302,
   );
 });

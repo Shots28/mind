@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useReducer, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -75,8 +75,26 @@ export function ProjectProvider({ children }) {
     }
   };
 
-  const deleteProject = async (id) => {
+  const pendingDeleteRef = useRef(null);
+
+  const deleteProject = async (id, { undo: withUndo } = {}) => {
+    const project = state.projects.find(p => p.id === id);
     dispatch({ type: 'DELETE_PROJECT', payload: id });
+
+    if (withUndo && project) {
+      if (pendingDeleteRef.current) {
+        clearTimeout(pendingDeleteRef.current.timerId);
+        pendingDeleteRef.current.flush();
+      }
+      const flush = async () => {
+        await supabase.from('projects').delete().eq('id', id);
+        pendingDeleteRef.current = null;
+      };
+      const timerId = setTimeout(flush, 5000);
+      pendingDeleteRef.current = { timerId, project, flush };
+      return;
+    }
+
     const { error } = await supabase.from('projects').delete().eq('id', id);
     if (error) {
       fetchProjects();
@@ -84,8 +102,16 @@ export function ProjectProvider({ children }) {
     }
   };
 
+  const undoDeleteProject = useCallback(() => {
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timerId);
+      dispatch({ type: 'ADD_PROJECT', payload: pendingDeleteRef.current.project });
+      pendingDeleteRef.current = null;
+    }
+  }, []);
+
   return (
-    <ProjectContext.Provider value={{ ...state, createProject, updateProject, deleteProject, fetchProjects }}>
+    <ProjectContext.Provider value={{ ...state, createProject, updateProject, deleteProject, undoDeleteProject, fetchProjects }}>
       {children}
     </ProjectContext.Provider>
   );
