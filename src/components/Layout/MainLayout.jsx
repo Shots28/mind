@@ -22,7 +22,7 @@ const MainLayout = ({ children }) => {
             </div>
 
             <div className="layout-mobile-nav">
-                <MobileNav />
+                <MobileNav onOpenSettings={() => setShowSettings(true)} />
             </div>
 
             <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />

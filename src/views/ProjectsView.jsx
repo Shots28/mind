@@ -60,9 +60,19 @@ function ProjectForm({ onClose, project = null, contexts }) {
   );
 }
 
-function ProjectCard({ project, stats, recentTasks, menuOpen, menuRef, setMenuOpen, setEditingProject, setShowForm, updateProject, deleteProject, toggleComplete, createTask, setEditingTask, navigate, showToast }) {
+function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEditingProject, setShowForm, updateProject, deleteProject, toggleComplete, createTask, setEditingTask, navigate, showToast }) {
   const [quickAdd, setQuickAdd] = useState('');
   const [adding, setAdding] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (menuOpen !== project.id) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen, project.id, setMenuOpen]);
 
   const handleQuickAdd = async (e) => {
     e.preventDefault();
@@ -170,16 +180,6 @@ export default function ProjectsView() {
   const [editingProject, setEditingProject] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [menuOpen, setMenuOpen] = useState(null);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (menuOpen === null) return;
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(null);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen]);
 
   const getProjectStats = (projectId) => {
     const projectTasks = tasks.filter(t => t.project_id === projectId);
@@ -218,7 +218,6 @@ export default function ProjectsView() {
                 stats={stats}
                 recentTasks={recentTasks}
                 menuOpen={menuOpen}
-                menuRef={menuRef}
                 setMenuOpen={setMenuOpen}
                 setEditingProject={setEditingProject}
                 setShowForm={setShowForm}

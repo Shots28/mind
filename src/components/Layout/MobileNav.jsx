@@ -1,20 +1,25 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, Plus, Repeat } from 'lucide-react';
+import { Home, Calendar, CheckSquare, Plus, Settings } from 'lucide-react';
 import TaskForm from '../Tasks/TaskForm';
 import Modal from '../Common/Modal';
 import './Layout.css';
 
-const MobileNav = () => {
+const MobileNav = ({ onOpenSettings }) => {
     const [showTaskForm, setShowTaskForm] = useState(false);
 
     const navItems = [
         { name: 'Today', path: '/today', icon: <Home size={22} /> },
         { name: 'Calendar', path: '/calendar', icon: <Calendar size={22} /> },
-        { name: 'Add', icon: <Plus size={24} />, isAction: true },
+        { name: 'Add', icon: <Plus size={24} />, isAction: true, action: 'task' },
         { name: 'Tasks', path: '/tasks', icon: <CheckSquare size={22} /> },
-        { name: 'Habits', path: '/habits', icon: <Repeat size={22} /> },
+        { name: 'Settings', icon: <Settings size={22} />, isAction: true, action: 'settings' },
     ];
+
+    const handleAction = (action) => {
+        if (action === 'task') setShowTaskForm(true);
+        if (action === 'settings') onOpenSettings?.();
+    };
 
     return (
         <nav className="mobile-nav glass-panel">
@@ -22,10 +27,11 @@ const MobileNav = () => {
                 item.isAction ? (
                     <button
                         key={item.name}
-                        className="mobile-nav-item action-btn"
-                        onClick={() => setShowTaskForm(true)}
+                        className={`mobile-nav-item ${item.action === 'task' ? 'action-btn' : ''}`}
+                        onClick={() => handleAction(item.action)}
                     >
                         {item.icon}
+                        {item.action !== 'task' && <span>{item.name}</span>}
                     </button>
                 ) : (
                     <NavLink

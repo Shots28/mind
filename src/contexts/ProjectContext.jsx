@@ -64,6 +64,15 @@ export function ProjectProvider({ children }) {
       fetchProjects();
       throw error;
     }
+    // Refresh joined relations when relational fields change
+    if (updates.context_id !== undefined) {
+      const { data } = await supabase
+        .from('projects')
+        .select('*, contexts(name, color)')
+        .eq('id', id)
+        .single();
+      if (data) dispatch({ type: 'UPDATE_PROJECT', payload: data });
+    }
   };
 
   const deleteProject = async (id) => {
