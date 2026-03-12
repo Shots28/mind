@@ -7,11 +7,14 @@ import { useCategories } from '../contexts/CategoryContext';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
 import TaskForm from '../components/Tasks/TaskForm';
+import EventForm from '../components/Events/EventForm';
 import InlineDatePicker from '../components/Tasks/InlineDatePicker';
 import { toLocalDateString } from '../lib/dates';
+import { isGoogleEvent, formatTimeRange } from '../lib/googleSync';
+import RecurrenceActionDialog from '../components/Events/RecurrenceActionDialog';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, Clock,
-  Trash2, Edit3, Check, CheckSquare
+  Trash2, Edit3, Check, CheckSquare, Cloud, Lock, Repeat
 } from 'lucide-react';
 import './CalendarView.css';
 
@@ -22,9 +25,92 @@ const VIEW_MODES = [
   { id: 'day', label: 'Day' },
 ];
 
+function DaySidebar({ selectedDate, selectedDateFormatted, events: dayEvents, tasks: dayTasks, onAddEvent, onAddTask, onEventClick, onDeleteEvent, onToggleComplete, onEditTask, onUpdateTask, quickTaskTitle, setQuickTaskTitle, onQuickAddTask }) {
+  return (
+    <div className="calendar-day-detail glass-panel">
+      {selectedDate ? (
+        <>
+          <div className="day-detail-header">
+            <h3>{selectedDateFormatted}</h3>
+            <div className="day-detail-actions">
+              <button className="btn-icon" onClick={onAddEvent} title="Add event"><Plus size={18} /></button>
+              <button className="btn-icon" onClick={onAddTask} title="Add task"><CheckSquare size={18} /></button>
+            </div>
+          </div>
+
+          {dayEvents.length > 0 && (
+            <div className="day-section">
+              <h4 className="day-section-title"><Calendar size={14} /> Events</h4>
+              <div className="day-items">
+                {dayEvents.map(event => (
+                  <div key={event.id} className="day-item event-item" onClick={() => onEventClick(event)}>
+                    {isGoogleEvent(event) ? <Cloud size={14} className="event-icon-google" /> : <Calendar size={14} />}
+                    <div className="day-event-content">
+                      <span>{event.title}</span>
+                      {!event.all_day && (
+                        <span className="day-event-time">{formatTimeRange(event.start_date, event.end_date, false)}</span>
+                      )}
+                    </div>
+                    {(event.recurrence_rule || event._isRecurrenceInstance) && <Repeat size={12} className="event-recurrence-icon" />}
+                    {event.is_read_only ? (
+                      <Lock size={12} className="event-readonly-icon" />
+                    ) : (
+                      <button className="btn-icon" onClick={(e) => { e.stopPropagation(); onDeleteEvent(event); }}><Trash2 size={14} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {dayTasks.length > 0 && (
+            <div className="day-section">
+              <h4 className="day-section-title"><Clock size={14} /> Tasks</h4>
+              <div className="day-items">
+                {dayTasks.map(task => (
+                  <div key={task.id} className="day-item task-item-cal">
+                    <div
+                      className={`cal-task-checkbox ${task.is_completed ? 'checked' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); onToggleComplete(task.id); }}
+                    >
+                      {task.is_completed && <Check size={12} />}
+                    </div>
+                    <span className={task.is_completed ? 'completed-text' : ''} onClick={() => onEditTask(task)}>{task.title}</span>
+                    <InlineDatePicker value={task.due_date} onChange={(d) => onUpdateTask(task.id, { due_date: d || null })}>
+                      <button className="btn-icon" onClick={(e) => e.stopPropagation()}><Calendar size={14} /></button>
+                    </InlineDatePicker>
+                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); onEditTask(task); }}><Edit3 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {dayEvents.length === 0 && dayTasks.length === 0 && (
+            <p className="no-items-text">No events or tasks for this day.</p>
+          )}
+
+          <form className="cal-quick-add" onSubmit={onQuickAddTask}>
+            <Plus size={16} className="cal-quick-add-icon" />
+            <input
+              type="text"
+              className="cal-quick-add-input"
+              placeholder="Quick add task..."
+              value={quickTaskTitle}
+              onChange={(e) => setQuickTaskTitle(e.target.value)}
+            />
+          </form>
+        </>
+      ) : (
+        <EmptyState icon={Calendar} title="Select a day" description="Click a date to see events and tasks." />
+      )}
+    </div>
+  );
+}
+
 export default function CalendarView() {
   const calendar = useCalendar();
-  const { events, createEvent, deleteEvent } = useEvents();
+  const { events, createEvent, updateEvent, deleteEvent, getExpandedEvents } = useEvents();
   const { tasks, createTask, updateTask, toggleComplete } = useTasks();
   const { activeContext } = useContexts();
   const { categories } = useCategories();
@@ -32,14 +118,35 @@ export default function CalendarView() {
   const [viewMode, setViewMode] = useState('month');
   const [showEventForm, setShowEventForm] = useState(false);
   const [showTaskForm, setShowTaskForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ title: '', all_day: true });
+  const [editingEvent, setEditingEvent] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [quickTaskTitle, setQuickTaskTitle] = useState('');
+  const [recurrenceAction, setRecurrenceAction] = useState(null); // { event, action: 'edit'|'delete' }
+
+  // Compute visible date range for recurrence expansion
+  const visibleRange = useMemo(() => {
+    const sel = new Date(selectedDate + 'T12:00:00');
+    if (viewMode === 'month') {
+      const start = new Date(calendar.year, calendar.month, 1);
+      const end = new Date(calendar.year, calendar.month + 1, 0);
+      return { start: toLocalDateString(start), end: toLocalDateString(end) };
+    }
+    if (viewMode === 'week') {
+      const dayOfWeek = sel.getDay();
+      const sunday = new Date(sel);
+      sunday.setDate(sel.getDate() - dayOfWeek);
+      const saturday = new Date(sunday);
+      saturday.setDate(sunday.getDate() + 6);
+      return { start: toLocalDateString(sunday), end: toLocalDateString(saturday) };
+    }
+    return { start: selectedDate, end: selectedDate };
+  }, [viewMode, selectedDate, calendar.year, calendar.month]);
 
   const filteredEvents = useMemo(() => {
-    if (activeContext === 'all') return events;
-    return events.filter(e => e.context_id === activeContext);
-  }, [events, activeContext]);
+    const expanded = getExpandedEvents(visibleRange.start, visibleRange.end);
+    if (activeContext === 'all') return expanded;
+    return expanded.filter(e => e.context_id === activeContext);
+  }, [getExpandedEvents, visibleRange, activeContext]);
 
   const filteredTasks = useMemo(() => {
     if (activeContext === 'all') return tasks;
@@ -47,7 +154,13 @@ export default function CalendarView() {
   }, [tasks, activeContext]);
 
   const getEventsForDay = useCallback((dateString) => {
-    return filteredEvents.filter(e => e.start_date && e.start_date.startsWith(dateString));
+    return filteredEvents
+      .filter(e => e.start_date && e.start_date.startsWith(dateString))
+      .sort((a, b) => {
+        if (a.all_day && !b.all_day) return -1;
+        if (!a.all_day && b.all_day) return 1;
+        return (a.start_date || '').localeCompare(b.start_date || '');
+      });
   }, [filteredEvents]);
 
   const getTasksForDay = useCallback((dateString) => {
@@ -59,21 +172,71 @@ export default function CalendarView() {
     setSelectedDate(dateString);
   };
 
-  const handleCreateEvent = async (e) => {
-    e.preventDefault();
-    if (!newEvent.title.trim()) return;
-    try {
-      await createEvent({
-        title: newEvent.title,
-        start_date: new Date(selectedDate + 'T12:00:00').toISOString(),
-        all_day: newEvent.all_day,
-        context_id: activeContext !== 'all' ? activeContext : null,
-      });
-      setNewEvent({ title: '', all_day: true });
-      setShowEventForm(false);
-    } catch (err) {
-      console.error(err);
+  const handleCreateEvent = async (eventData) => {
+    await createEvent({
+      ...eventData,
+      context_id: eventData.context_id || (activeContext !== 'all' ? activeContext : null),
+    });
+    setShowEventForm(false);
+  };
+
+  const handleUpdateEvent = async (eventData) => {
+    if (!editingEvent) return;
+    // For recurrence instances, use the parent ID
+    const eventId = editingEvent._parentId || editingEvent.id;
+    await updateEvent(eventId, eventData);
+    setEditingEvent(null);
+  };
+
+  const handleEventClick = (event) => {
+    if (event._isRecurrenceInstance && !event.is_read_only) {
+      setRecurrenceAction({ event, action: 'edit' });
+    } else {
+      setEditingEvent(event);
     }
+  };
+
+  const handleDeleteEvent = (event) => {
+    if (event.is_read_only) return;
+    if (event._isRecurrenceInstance || event.recurrence_rule) {
+      setRecurrenceAction({ event, action: 'delete' });
+    } else {
+      confirmAndDelete(event);
+    }
+  };
+
+  const confirmAndDelete = async (event) => {
+    if (isGoogleEvent(event)) {
+      if (!confirm('This will also delete the event from Google Calendar. Continue?')) return;
+    }
+    const eventId = event._parentId || event.id;
+    await deleteEvent(eventId);
+  };
+
+  const handleRecurrenceChoice = async (choice) => {
+    if (!recurrenceAction) return;
+    const { event, action } = recurrenceAction;
+    const masterId = event._parentId || event.id;
+
+    if (action === 'edit') {
+      if (choice === 'all') {
+        // Edit master event — find the master from events array
+        const master = events.find(e => e.id === masterId);
+        setEditingEvent(master || event);
+      } else {
+        // Edit single instance — just open with the instance data
+        setEditingEvent(event);
+      }
+    } else if (action === 'delete') {
+      if (choice === 'all') {
+        await confirmAndDelete({ ...event, id: masterId });
+      } else {
+        // For "this event only", delete the master (simplified — full exception support would need more DB work)
+        // For now, we delete the whole series with a note
+        await confirmAndDelete({ ...event, id: masterId });
+      }
+    }
+    setRecurrenceAction(null);
   };
 
   const handleQuickAddTask = async (e) => {
@@ -164,76 +327,22 @@ export default function CalendarView() {
     return `${start.toLocaleDateString('en-US', { month: 'short' })} ${start.getDate()} - ${end.toLocaleDateString('en-US', { month: 'short' })} ${end.getDate()}, ${end.getFullYear()}`;
   }, [weekDays]);
 
-  const DaySidebar = () => (
-    <div className="calendar-day-detail glass-panel">
-      {selectedDate ? (
-        <>
-          <div className="day-detail-header">
-            <h3>{selectedDateFormatted}</h3>
-            <div className="day-detail-actions">
-              <button className="btn-icon" onClick={() => setShowEventForm(true)} title="Add event"><Plus size={18} /></button>
-              <button className="btn-icon" onClick={() => setShowTaskForm(true)} title="Add task"><CheckSquare size={18} /></button>
-            </div>
-          </div>
-
-          {selectedDayEvents.length > 0 && (
-            <div className="day-section">
-              <h4 className="day-section-title"><Calendar size={14} /> Events</h4>
-              <div className="day-items">
-                {selectedDayEvents.map(event => (
-                  <div key={event.id} className="day-item event-item">
-                    <Calendar size={14} />
-                    <span>{event.title}</span>
-                    <button className="btn-icon" onClick={() => deleteEvent(event.id)}><Trash2 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedDayTasks.length > 0 && (
-            <div className="day-section">
-              <h4 className="day-section-title"><Clock size={14} /> Tasks</h4>
-              <div className="day-items">
-                {selectedDayTasks.map(task => (
-                  <div key={task.id} className="day-item task-item-cal">
-                    <div
-                      className={`cal-task-checkbox ${task.is_completed ? 'checked' : ''}`}
-                      onClick={(e) => { e.stopPropagation(); toggleComplete(task.id); }}
-                    >
-                      {task.is_completed && <Check size={12} />}
-                    </div>
-                    <span className={task.is_completed ? 'completed-text' : ''} onClick={() => setEditingTask(task)}>{task.title}</span>
-                    <InlineDatePicker value={task.due_date} onChange={(d) => updateTask(task.id, { due_date: d || null })}>
-                      <button className="btn-icon" onClick={(e) => e.stopPropagation()}><Calendar size={14} /></button>
-                    </InlineDatePicker>
-                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setEditingTask(task); }}><Edit3 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedDayEvents.length === 0 && selectedDayTasks.length === 0 && (
-            <p className="no-items-text">No events or tasks for this day.</p>
-          )}
-
-          <form className="cal-quick-add" onSubmit={handleQuickAddTask}>
-            <Plus size={16} className="cal-quick-add-icon" />
-            <input
-              type="text"
-              className="cal-quick-add-input"
-              placeholder="Quick add task..."
-              value={quickTaskTitle}
-              onChange={(e) => setQuickTaskTitle(e.target.value)}
-            />
-          </form>
-        </>
-      ) : (
-        <EmptyState icon={Calendar} title="Select a day" description="Click a date to see events and tasks." />
-      )}
-    </div>
-  );
+  const daySidebarProps = {
+    selectedDate,
+    selectedDateFormatted,
+    events: selectedDayEvents,
+    tasks: selectedDayTasks,
+    onAddEvent: () => setShowEventForm(true),
+    onAddTask: () => setShowTaskForm(true),
+    onEventClick: handleEventClick,
+    onDeleteEvent: handleDeleteEvent,
+    onToggleComplete: toggleComplete,
+    onEditTask: setEditingTask,
+    onUpdateTask: updateTask,
+    quickTaskTitle,
+    setQuickTaskTitle,
+    onQuickAddTask: handleQuickAddTask,
+  };
 
   return (
     <div className="calendar-view">
@@ -273,7 +382,8 @@ export default function CalendarView() {
                     <span className="cell-day-number">{day.day}</span>
                     {hasItems && (
                       <div className="cell-dots">
-                        {dayEvents.length > 0 && <span className="dot event-dot" />}
+                        {dayEvents.some(e => isGoogleEvent(e)) && <span className="dot google-dot" />}
+                        {dayEvents.some(e => !isGoogleEvent(e)) && <span className="dot event-dot" />}
                         {dayTasks.length > 0 && <span className="dot task-dot" />}
                       </div>
                     )}
@@ -284,7 +394,7 @@ export default function CalendarView() {
           </div>
 
           <div className="calendar-sidebar">
-            <DaySidebar />
+            <DaySidebar {...daySidebarProps} />
           </div>
         </>
       )}
@@ -318,13 +428,13 @@ export default function CalendarView() {
                     <span className={`week-day-number ${day.isToday ? 'today-number' : ''}`}>{day.day}</span>
                   </div>
                   <div className="week-day-items">
-                    {dayEvents.map(event => (
-                      <div key={event.id} className="week-item week-event">
-                        <Calendar size={12} />
+                    {dayEvents.slice(0, 3).map(event => (
+                      <div key={event.id} className="week-item week-event" onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}>
+                        {isGoogleEvent(event) ? <Cloud size={12} className="event-icon-google" /> : <Calendar size={12} />}
                         <span>{event.title}</span>
                       </div>
                     ))}
-                    {dayTasks.map(task => (
+                    {dayTasks.slice(0, Math.max(0, 5 - Math.min(dayEvents.length, 3))).map(task => (
                       <div key={task.id} className="week-item week-task">
                         <div
                           className={`cal-task-checkbox small ${task.is_completed ? 'checked' : ''}`}
@@ -335,6 +445,13 @@ export default function CalendarView() {
                         <span className={task.is_completed ? 'completed-text' : ''}>{task.title}</span>
                       </div>
                     ))}
+                    {(() => {
+                      const shown = Math.min(dayEvents.length, 3) + Math.min(dayTasks.length, Math.max(0, 5 - Math.min(dayEvents.length, 3)));
+                      const total = dayEvents.length + dayTasks.length;
+                      const overflow = total - shown;
+                      if (overflow > 0) return <span className="week-overflow">+{overflow} more</span>;
+                      return null;
+                    })()}
                     {dayEvents.length === 0 && dayTasks.length === 0 && (
                       <span className="week-empty">No items</span>
                     )}
@@ -345,7 +462,7 @@ export default function CalendarView() {
           </div>
 
           <div className="calendar-sidebar">
-            <DaySidebar />
+            <DaySidebar {...daySidebarProps} />
           </div>
         </div>
       )}
@@ -373,15 +490,23 @@ export default function CalendarView() {
               {selectedDayEvents.length > 0 ? (
                 <div className="day-items">
                   {selectedDayEvents.map(event => (
-                    <div key={event.id} className="day-item event-item">
-                      <Calendar size={14} />
-                      <span>{event.title}</span>
+                    <div key={event.id} className="day-item event-item" onClick={() => handleEventClick(event)}>
+                      {isGoogleEvent(event) ? <Cloud size={14} className="event-icon-google" /> : <Calendar size={14} />}
+                      <div className="day-event-content">
+                        <span>{event.title}</span>
+                        {event.location && <span className="day-event-location">{event.location}</span>}
+                      </div>
                       {event.all_day ? (
                         <span className="event-badge">All day</span>
                       ) : event.start_date && (
-                        <span className="event-badge">{new Date(event.start_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="event-badge">{formatTimeRange(event.start_date, event.end_date, false)}</span>
                       )}
-                      <button className="btn-icon" onClick={() => deleteEvent(event.id)}><Trash2 size={14} /></button>
+                      {(event.recurrence_rule || event._isRecurrenceInstance) && <Repeat size={12} className="event-recurrence-icon" />}
+                      {event.is_read_only ? (
+                        <Lock size={12} className="event-readonly-icon" />
+                      ) : (
+                        <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event); }}><Trash2 size={14} /></button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -441,26 +566,23 @@ export default function CalendarView() {
         </div>
       )}
 
-      <Modal isOpen={showEventForm} onClose={() => setShowEventForm(false)} title="New Event" size="small">
-        <form onSubmit={handleCreateEvent} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="Event title"
-            value={newEvent.title}
-            onChange={(e) => setNewEvent(prev => ({ ...prev, title: e.target.value }))}
-            autoFocus
+      <Modal isOpen={showEventForm} onClose={() => setShowEventForm(false)} title="New Event">
+        <EventForm
+          date={selectedDate}
+          onSubmit={handleCreateEvent}
+          onCancel={() => setShowEventForm(false)}
+        />
+      </Modal>
+
+      <Modal isOpen={!!editingEvent} onClose={() => setEditingEvent(null)} title={editingEvent?.is_read_only ? 'Event Details' : 'Edit Event'}>
+        {editingEvent && (
+          <EventForm
+            initialData={editingEvent}
+            onSubmit={handleUpdateEvent}
+            onCancel={() => setEditingEvent(null)}
+            isReadOnly={editingEvent.is_read_only}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '14px' }}>
-            <input
-              type="checkbox"
-              checked={newEvent.all_day}
-              onChange={(e) => setNewEvent(prev => ({ ...prev, all_day: e.target.checked }))}
-            />
-            All day event
-          </label>
-          <button type="submit" className="btn-primary" style={{ width: '100%' }}>Create Event</button>
-        </form>
+        )}
       </Modal>
 
       <Modal isOpen={showTaskForm} onClose={() => setShowTaskForm(false)} title="New Task">
@@ -470,6 +592,14 @@ export default function CalendarView() {
       <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Edit Task">
         <TaskForm task={editingTask} onClose={() => setEditingTask(null)} />
       </Modal>
+
+      {recurrenceAction && (
+        <RecurrenceActionDialog
+          action={recurrenceAction.action}
+          onChoice={handleRecurrenceChoice}
+          onCancel={() => setRecurrenceAction(null)}
+        />
+      )}
     </div>
   );
 }

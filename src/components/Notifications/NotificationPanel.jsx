@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
 import { toLocalDateString } from '../../lib/dates';
 import { Bell, AlertTriangle, Clock, CheckCircle, X } from 'lucide-react';
@@ -20,13 +20,18 @@ export default function NotificationPanel({ isOpen, onClose }) {
 
   const today = toLocalDateString();
 
-  const overdueTasks = tasks.filter(t => !t.is_completed && t.due_date && t.due_date < today);
-  const dueTodayTasks = tasks.filter(t => !t.is_completed && t.due_date === today);
-  const recentlyCompleted = tasks.filter(t => {
-    if (!t.is_completed || !t.completed_at) return false;
-    const completedTime = new Date(t.completed_at).getTime();
-    return Date.now() - completedTime < 24 * 60 * 60 * 1000;
-  });
+  const overdueTasks = useMemo(() =>
+    tasks.filter(t => !t.is_completed && t.due_date && t.due_date < today),
+    [tasks, today]
+  );
+  const dueTodayTasks = useMemo(() =>
+    tasks.filter(t => !t.is_completed && t.due_date === today),
+    [tasks, today]
+  );
+  const recentlyCompleted = useMemo(() =>
+    tasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(today)),
+    [tasks, today]
+  );
 
   const allNotifications = [
     ...overdueTasks.map(t => ({ id: t.id, type: 'overdue', title: t.title, subtitle: `Due ${new Date(t.due_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` })),

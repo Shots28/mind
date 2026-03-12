@@ -17,7 +17,7 @@ export default function TasksView() {
   const { completedTasks, getTasksByCategory, updateTask } = useTasks();
   const { activeContext } = useContexts();
   const { categories } = useCategories();
-  const { projects } = useProjects();
+  useProjects(); // Ensure projects are loaded for task.projects references
   const [searchParams] = useSearchParams();
   const projectFilter = searchParams.get('project');
   const [showTaskForm, setShowTaskForm] = useState(false);

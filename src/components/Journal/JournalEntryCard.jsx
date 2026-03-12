@@ -4,7 +4,7 @@ import './Journal.css';
 
 const MAX_HEIGHT = 150;
 
-export default function JournalEntryCard({ entry, onDelete, compact = false }) {
+export default function JournalEntryCard({ entry, onDelete }) {
   const contentRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
