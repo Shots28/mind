@@ -5,7 +5,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { useTasks } from '../../contexts/TaskContext';
 import NotificationPanel from '../Notifications/NotificationPanel';
-import SettingsPanel from '../Settings/SettingsPanel';
 import './Layout.css';
 
 const routeTitles = {
@@ -17,7 +16,7 @@ const routeTitles = {
     '/projects': 'Projects',
 };
 
-const TopBar = () => {
+const TopBar = ({ onOpenSettings }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
@@ -26,7 +25,6 @@ const TopBar = () => {
     const [showContextMenu, setShowContextMenu] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [showSettings, setShowSettings] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearchResults, setShowSearchResults] = useState(false);
     const contextMenuRef = useRef(null);
@@ -140,7 +138,7 @@ const TopBar = () => {
                                 <span className="user-dropdown-email">{user?.email}</span>
                             </div>
                             <div className="user-dropdown-divider" />
-                            <button className="user-dropdown-item" onClick={() => { setShowSettings(true); setShowUserMenu(false); }}>
+                            <button className="user-dropdown-item" onClick={() => { onOpenSettings?.(); setShowUserMenu(false); }}>
                                 <Settings size={16} />
                                 <span>Settings</span>
                             </button>
@@ -152,7 +150,6 @@ const TopBar = () => {
                     )}
                 </div>
             </div>
-            <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
         </header>
     );
 };

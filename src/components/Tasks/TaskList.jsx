@@ -59,7 +59,12 @@ const TaskItem = ({ task }) => {
                     role="checkbox"
                     aria-checked={task.is_completed}
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && toggleComplete(task.id, () => showToast('Task completed!'))}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleComplete(task.id, () => showToast('Task completed!'));
+                        }
+                    }}
                 >
                     {task.is_completed && <Check size={14} className="check-icon" />}
                 </div>

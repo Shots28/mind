@@ -34,14 +34,15 @@ export default function HabitStats({ compact = false, date }) {
       const dateStr = toLocalDateString(d);
       const dayLogs = weekLogs.filter(l => l.date === dateStr);
       const completed = new Set(dayLogs.map(l => l.habit_id)).size;
+      const dayDueCount = habits.filter(h => isHabitDueOnDate(h, dateStr)).length;
       days.push({
         label: d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0),
         completed,
-        total: dueHabits.length || 1,
+        total: dayDueCount || 1,
       });
     }
     return days;
-  }, [weekLogs, dueHabits]);
+  }, [weekLogs, habits]);
 
   if (dueHabits.length === 0) return null;
 

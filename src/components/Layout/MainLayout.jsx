@@ -15,7 +15,7 @@ const MainLayout = ({ children }) => {
             </div>
 
             <div className="layout-content">
-                <TopBar />
+                <TopBar onOpenSettings={() => setShowSettings(true)} />
                 <main className="main-view">
                     {children}
                 </main>

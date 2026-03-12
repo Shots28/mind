@@ -182,16 +182,23 @@ export function HabitProvider({ children }) {
   const getStreak = useCallback((habitId) => {
     const logs = state.weekLogs.filter(l => l.habit_id === habitId);
     const dates = new Set(logs.map(l => l.date));
+    const habit = state.habits.find(h => h.id === habitId);
     let streak = 0;
     const d = new Date();
-    for (let i = 0; i < 30; i++) {
+    // weekLogs only covers 7 days, so cap iteration accordingly
+    for (let i = 0; i < 7; i++) {
       const dateStr = toLocalDateString(d);
+      // Skip days when the habit is not due
+      if (habit && !isHabitDueOnDay(habit, d.getDay())) {
+        d.setDate(d.getDate() - 1);
+        continue;
+      }
       if (dates.has(dateStr)) streak++;
       else if (i > 0) break;
       d.setDate(d.getDate() - 1);
     }
     return streak;
-  }, [state.weekLogs]);
+  }, [state.weekLogs, state.habits]);
 
   return (
     <HabitContext.Provider value={{

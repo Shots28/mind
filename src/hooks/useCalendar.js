@@ -1,12 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { toLocalDateString } from '../lib/dates';
 
 export default function useCalendar() {
-  const now = new Date();
-  const [currentMonth, setCurrentMonth] = useState(now.getMonth());
-  const [currentYear, setCurrentYear] = useState(now.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
 
-  const goToPrevMonth = () => {
+  const goToPrevMonth = useCallback(() => {
     setCurrentMonth(prev => {
       if (prev === 0) {
         setCurrentYear(y => y - 1);
@@ -14,9 +13,9 @@ export default function useCalendar() {
       }
       return prev - 1;
     });
-  };
+  }, []);
 
-  const goToNextMonth = () => {
+  const goToNextMonth = useCallback(() => {
     setCurrentMonth(prev => {
       if (prev === 11) {
         setCurrentYear(y => y + 1);
@@ -24,14 +23,16 @@ export default function useCalendar() {
       }
       return prev + 1;
     });
-  };
+  }, []);
 
-  const goToToday = () => {
+  const goToToday = useCallback(() => {
+    const now = new Date();
     setCurrentMonth(now.getMonth());
     setCurrentYear(now.getFullYear());
-  };
+  }, []);
 
   const calendarData = useMemo(() => {
+    const now = new Date();
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
     const monthName = new Date(currentYear, currentMonth).toLocaleString('default', { month: 'long' });
