@@ -1,7 +1,7 @@
 /**
  * Lightweight recurrence expansion without rrule dependency.
- * For Google-sourced events, instances come from the API directly.
- * This is only used for locally-created recurring events.
+ * Expands recurring events (both local and Google-sourced) into
+ * individual occurrences within a given date range.
  */
 
 const FREQ_MAP = {
@@ -45,15 +45,13 @@ function matchesByDay(date, byDay) {
 export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences = 200) {
   if (!event.recurrence_rule) return [event];
 
-  // For Google-sourced recurring events with instances already stored,
-  // don't expand -- they're already in the events array
-  if (event.source === 'google') return [event];
-
   const rule = parseRRule(event.recurrence_rule);
   const freq = rule.FREQ;
   const interval = parseInt(rule.INTERVAL) || 1;
   const count = rule.COUNT ? parseInt(rule.COUNT) : null;
-  const until = rule.UNTIL ? new Date(rule.UNTIL.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')) : null;
+  const until = rule.UNTIL ? new Date(rule.UNTIL.replace(/(\d{4})(\d{2})(\d{2})(T(\d{2})(\d{2})(\d{2})Z?)?/, (_, y, m, d, _t, h, mi, s) =>
+    h ? `${y}-${m}-${d}T${h}:${mi}:${s}Z` : `${y}-${m}-${d}`
+  )) : null;
   const byDay = rule.BYDAY;
 
   if (!freq) return [event];
@@ -70,6 +68,9 @@ export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences
 
   const rStart = new Date(rangeStart);
   const rEnd = new Date(rangeEnd);
+  // Extend rEnd to include the full end day (rangeEnd parses as midnight UTC,
+  // but event times may be later in the day)
+  rEnd.setDate(rEnd.getDate() + 1);
 
   while (current <= rEnd && occurrenceCount < maxOccurrences) {
     if (until && current > until) break;

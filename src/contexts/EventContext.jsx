@@ -184,7 +184,7 @@ export function EventProvider({ children }) {
   const getExpandedEvents = useCallback((rangeStart, rangeEnd) => {
     const expanded = [];
     for (const event of state.events) {
-      if (event.recurrence_rule && event.source !== 'google') {
+      if (event.recurrence_rule) {
         expanded.push(...expandRecurringEvent(event, rangeStart, rangeEnd));
       } else {
         expanded.push(event);
