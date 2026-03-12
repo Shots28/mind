@@ -6,6 +6,7 @@ import {
   Calendar, Plus, Trash2, RefreshCw, Star, ChevronDown, ChevronRight,
   Link2, Unlink, AlertCircle, Check, Loader2, Lock
 } from 'lucide-react';
+import Modal from '../Common/Modal';
 import './GoogleCalendarSettings.css';
 
 function ConnectionItem({ connection, onDisconnect }) {
@@ -272,39 +273,37 @@ export default function GoogleCalendarSettings() {
       ))}
 
       {/* Disconnect confirmation */}
-      {showDisconnectConfirm && (
-        <div className="gcal-confirm-overlay">
-          <div className="gcal-confirm-dialog glass-panel">
-            <p className="gcal-confirm-title">Disconnect Google Calendar?</p>
-            <p className="gcal-confirm-text">
-              What should happen to imported events?
-            </p>
-            <div className="gcal-confirm-actions">
-              <button
-                className="btn-secondary"
-                onClick={() => handleDisconnect(showDisconnectConfirm, true)}
-                disabled={disconnecting}
-              >
-                Keep events locally
-              </button>
-              <button
-                className="btn-danger"
-                onClick={() => handleDisconnect(showDisconnectConfirm, false)}
-                disabled={disconnecting}
-              >
-                Remove Google events
-              </button>
-              <button
-                className="btn-ghost"
-                onClick={() => setShowDisconnectConfirm(null)}
-                disabled={disconnecting}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+      <Modal isOpen={!!showDisconnectConfirm} onClose={() => setShowDisconnectConfirm(null)} title="Disconnect Google Calendar?" size="small">
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: '1.5', marginBottom: '16px' }}>
+          What should happen to imported events?
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <button
+            className="btn-primary"
+            onClick={() => handleDisconnect(showDisconnectConfirm, true)}
+            disabled={disconnecting}
+            style={{ width: '100%' }}
+          >
+            Keep events locally
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => handleDisconnect(showDisconnectConfirm, false)}
+            disabled={disconnecting}
+            style={{ width: '100%', background: 'var(--danger-color)' }}
+          >
+            Remove Google events
+          </button>
+          <button
+            className="btn-icon"
+            onClick={() => setShowDisconnectConfirm(null)}
+            disabled={disconnecting}
+            style={{ width: '100%', padding: '10px', justifyContent: 'center' }}
+          >
+            Cancel
+          </button>
         </div>
-      )}
+      </Modal>
 
       {/* Connect button */}
       <button className="gcal-connect-btn" onClick={handleConnect}>

@@ -5,6 +5,7 @@ import HabitList from '../components/Habits/HabitList';
 import HabitForm from '../components/Habits/HabitForm';
 import HabitStats from '../components/Habits/HabitStats';
 import Modal from '../components/Common/Modal';
+import ConfirmDialog from '../components/Common/ConfirmDialog';
 import EmptyState from '../components/Common/EmptyState';
 import { Plus, Repeat, Trash2, Edit3 } from 'lucide-react';
 import './HabitsView.css';
@@ -14,6 +15,7 @@ export default function HabitsView() {
   const { activeContext } = useContexts();
   const [showForm, setShowForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const filtered = activeContext === 'all' ? habits : habits.filter(h => h.context_id === activeContext);
 
@@ -52,7 +54,7 @@ export default function HabitsView() {
                   <button className="btn-icon" onClick={() => { setEditingHabit(habit); setShowForm(true); }}>
                     <Edit3 size={14} />
                   </button>
-                  <button className="btn-icon" onClick={() => deleteHabit(habit.id)}>
+                  <button className="btn-icon" onClick={() => setDeleteTarget(habit)}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -72,6 +74,13 @@ export default function HabitsView() {
       <Modal isOpen={showForm} onClose={() => { setShowForm(false); setEditingHabit(null); }} title={editingHabit ? 'Edit Habit' : 'New Habit'}>
         <HabitForm habit={editingHabit} onClose={() => { setShowForm(false); setEditingHabit(null); }} />
       </Modal>
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => { deleteHabit(deleteTarget.id); setDeleteTarget(null); }}
+        title="Delete Habit"
+        message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.title}"? All completion history will be lost.` : ''}
+      />
     </div>
   );
 }

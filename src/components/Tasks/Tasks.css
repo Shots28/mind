@@ -267,9 +267,9 @@ div:hover > .drag-handle {
 }
 
 .droppable-over {
-    background: rgba(99, 102, 241, 0.06);
+    background: rgba(59, 130, 246, 0.06);
     border-radius: 12px;
-    outline: 2px dashed rgba(99, 102, 241, 0.3);
+    outline: 2px dashed rgba(59, 130, 246, 0.3);
     outline-offset: 4px;
     transition: all 0.2s;
 }

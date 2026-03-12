@@ -3,7 +3,7 @@
  * Checks for a timezone override in localStorage, falls back to browser timezone.
  */
 export function toLocalDateString(date = new Date()) {
-  const tz = localStorage.getItem('mind_timezone_override');
+  const tz = localStorage.getItem('zenith_timezone_override');
   if (tz) {
     try {
       const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -22,7 +22,7 @@ export function toLocalDateString(date = new Date()) {
  * Returns the user's current timezone string.
  */
 export function getUserTimezone() {
-  return localStorage.getItem('mind_timezone_override') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return localStorage.getItem('zenith_timezone_override') || Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
 /**

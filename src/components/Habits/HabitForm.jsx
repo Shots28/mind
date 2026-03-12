@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useHabits } from '../../contexts/HabitContext';
 import { useContexts } from '../../contexts/ContextContext';
+import { useToast } from '../Common/Toast';
 
-const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
+const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
 
 export default function HabitForm({ habit = null, onClose }) {
   const { createHabit, updateHabit } = useHabits();
   const { contexts, activeContext } = useContexts();
+  const { showToast } = useToast();
   const [title, setTitle] = useState(habit?.title || '');
   const [description, setDescription] = useState(habit?.description || '');
   const [frequency, setFrequency] = useState(habit?.frequency || 'daily');
   const [contextId, setContextId] = useState(habit?.context_id || (activeContext !== 'all' ? activeContext : ''));
-  const [color, setColor] = useState(habit?.color || '#6366f1');
+  const [color, setColor] = useState(habit?.color || '#3b82f6');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -30,7 +32,7 @@ export default function HabitForm({ habit = null, onClose }) {
       else await createHabit(data);
       onClose();
     } catch (err) {
-      console.error(err);
+      showToast(err.message || 'Failed to save habit', { type: 'error' });
     } finally {
       setLoading(false);
     }

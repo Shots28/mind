@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const CategoryContext = createContext({});
 
-const STORAGE_KEY = 'mind_categories';
+const STORAGE_KEY = 'zenith_categories';
 
 const DEFAULT_CATEGORIES = [
   { id: 'must_do', name: 'Must Do', isDefault: true },

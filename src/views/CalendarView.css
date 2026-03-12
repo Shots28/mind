@@ -112,7 +112,7 @@
 }
 
 .calendar-cell.selected {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(59, 130, 246, 0.15);
 }
 
 .cell-day-number {
@@ -133,6 +133,10 @@
 
 .cell-dots .event-dot {
   background: var(--accent-color);
+}
+
+.cell-dots .google-dot {
+  background: #4285f4;
 }
 
 .cell-dots .task-dot {
@@ -219,6 +223,15 @@
   opacity: 1;
 }
 
+.event-item {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.event-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .event-item svg {
   color: var(--accent-color);
 }
@@ -230,6 +243,49 @@
   padding: 2px 8px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
+  white-space: nowrap;
+}
+
+.event-icon-google {
+  color: #4285f4;
+}
+
+.event-readonly-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.event-recurrence-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.day-event-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.day-event-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.day-event-location {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-overflow {
+  font-size: 11px;
+  color: var(--accent-color);
+  text-align: center;
+  padding: 2px 0;
 }
 
 .task-item-cal {
@@ -356,7 +412,7 @@
 }
 
 .week-day-column.today {
-  background: rgba(99, 102, 241, 0.06);
+  background: rgba(59, 130, 246, 0.06);
 }
 
 .week-day-header {
@@ -417,7 +473,7 @@
 }
 
 .week-event {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(59, 130, 246, 0.1);
   border-left: 2px solid var(--accent-color);
 }
 

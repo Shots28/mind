@@ -159,6 +159,43 @@
     opacity: 0.8;
 }
 
+.settings-change-password-btn {
+  background: none;
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: left;
+}
+
+.settings-change-password-btn:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--accent-color);
+}
+
+.settings-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-password-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.settings-error {
+  color: var(--danger-color);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
 .settings-signout {
   display: flex;
   align-items: center;

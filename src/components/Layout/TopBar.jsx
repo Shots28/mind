@@ -31,7 +31,7 @@ const TopBar = ({ onOpenSettings }) => {
     const userMenuRef = useRef(null);
     const searchRef = useRef(null);
 
-    const pageTitle = routeTitles[location.pathname] || 'Mind';
+    const pageTitle = routeTitles[location.pathname] || 'Zenith';
     const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
     const activeContextName = activeContext === 'all'
@@ -102,7 +102,7 @@ const TopBar = ({ onOpenSettings }) => {
                     <Search size={16} className="search-icon" />
                     <input
                         type="text"
-                        placeholder="Search Mind..."
+                        placeholder="Search Zenith..."
                         className="input-field search-input"
                         value={searchQuery}
                         onChange={(e) => { setSearchQuery(e.target.value); setShowSearchResults(true); }}
@@ -129,7 +129,7 @@ const TopBar = ({ onOpenSettings }) => {
                 />
                 <div className="user-menu-wrapper" ref={userMenuRef}>
                     <div className="user-avatar" onClick={() => setShowUserMenu(!showUserMenu)}>
-                        <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=6366f1&color=fff&size=64`} alt={userName} />
+                        <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=3b82f6&color=fff&size=64`} alt={userName} />
                     </div>
                     {showUserMenu && (
                         <div className="user-dropdown glass-panel">

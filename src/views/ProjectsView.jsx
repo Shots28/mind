@@ -8,6 +8,7 @@ import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
 import { Plus, FolderOpen, MoreHorizontal, Trash2, Edit3, Archive, Clock, ArrowRight, Check } from 'lucide-react';
 import { useToast } from '../components/Common/Toast';
+import ConfirmDialog from '../components/Common/ConfirmDialog';
 import './ProjectsView.css';
 
 function ProjectForm({ onClose, project = null, contexts }) {
@@ -15,10 +16,10 @@ function ProjectForm({ onClose, project = null, contexts }) {
   const [name, setName] = useState(project?.name || '');
   const [description, setDescription] = useState(project?.description || '');
   const [contextId, setContextId] = useState(project?.context_id || '');
-  const [color, setColor] = useState(project?.color || '#6366f1');
+  const [color, setColor] = useState(project?.color || '#3b82f6');
   const [loading, setLoading] = useState(false);
 
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
+  const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6'];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,6 +64,7 @@ function ProjectForm({ onClose, project = null, contexts }) {
 function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEditingProject, setShowForm, updateProject, deleteProject, toggleComplete, createTask, setEditingTask, navigate, showToast }) {
   const [quickAdd, setQuickAdd] = useState('');
   const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -109,7 +111,7 @@ function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEd
               <button onClick={() => { updateProject(project.id, { status: 'archived' }); setMenuOpen(null); }}>
                 <Archive size={14} /><span>Archive</span>
               </button>
-              <button className="danger" onClick={() => { deleteProject(project.id); setMenuOpen(null); }}>
+              <button className="danger" onClick={() => { setConfirmDelete(true); setMenuOpen(null); }}>
                 <Trash2 size={14} /><span>Delete</span>
               </button>
             </div>
@@ -166,6 +168,13 @@ function ProjectCard({ project, stats, recentTasks, menuOpen, setMenuOpen, setEd
       <button className="project-view-all" onClick={() => navigate(`/tasks?project=${project.id}`)}>
         View all tasks <ArrowRight size={14} />
       </button>
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => deleteProject(project.id)}
+        title="Delete Project"
+        message={`Are you sure you want to delete "${project.name}"? Tasks in this project will not be deleted.`}
+      />
     </div>
   );
 }

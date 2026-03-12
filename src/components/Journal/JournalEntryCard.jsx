@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import ConfirmDialog from '../Common/ConfirmDialog';
 import './Journal.css';
 
 const MAX_HEIGHT = 150;
@@ -8,6 +9,7 @@ export default function JournalEntryCard({ entry, onDelete }) {
   const contentRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -25,7 +27,7 @@ export default function JournalEntryCard({ entry, onDelete }) {
           <span className="journal-entry-context" style={{ color: entry.contexts.color }}>{entry.contexts.name}</span>
         )}
         {onDelete && (
-          <button className="btn-icon" onClick={() => onDelete(entry.id)}><Trash2 size={14} /></button>
+          <button className="btn-icon" onClick={() => setConfirmDelete(true)}><Trash2 size={14} /></button>
         )}
       </div>
       <div
@@ -40,6 +42,13 @@ export default function JournalEntryCard({ entry, onDelete }) {
           {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show more</>}
         </button>
       )}
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => onDelete(entry.id)}
+        title="Delete Entry"
+        message="Are you sure you want to delete this journal entry?"
+      />
     </div>
   );
 }

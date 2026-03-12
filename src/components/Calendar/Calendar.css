@@ -68,7 +68,7 @@
 .calendar-day.selected {
     background: var(--accent-color);
     color: white;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .calendar-day.today.selected {
