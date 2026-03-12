@@ -3,6 +3,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay } from '@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTasks } from '../contexts/TaskContext';
 import { useContexts } from '../contexts/ContextContext';
+import { useCategories } from '../contexts/CategoryContext';
 import { useHabits } from '../contexts/HabitContext';
 import { isHabitDueOnDate } from '../contexts/HabitContext';
 import TaskList from '../components/Tasks/TaskList';
@@ -10,6 +11,7 @@ import { TaskItem } from '../components/Tasks/TaskList';
 import HabitList from '../components/Habits/HabitList';
 import HabitStats from '../components/Habits/HabitStats';
 import CalendarWidget from '../components/Calendar/CalendarWidget';
+import EventsWidget from '../components/Events/EventsWidget';
 import JournalWidget from '../components/Journal/JournalWidget';
 import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
@@ -17,8 +19,9 @@ import { toLocalDateString } from '../lib/dates';
 import './Views.css';
 
 export default function TodayView() {
-  const { mustDoTasks, upNextTasks, tasks, updateTask } = useTasks();
+  const { tasks, getTasksByCategory, updateTask } = useTasks();
   const { activeContext } = useContexts();
+  const { categories } = useCategories();
   const { habits } = useHabits();
   const today = toLocalDateString();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -57,25 +60,22 @@ export default function TodayView() {
     }
   };
 
-  const filteredMustDo = useMemo(() => {
-    let filtered = mustDoTasks.filter(t => !t.due_date || t.due_date <= selectedDate);
-    if (activeContext !== 'all') filtered = filtered.filter(t => t.context_id === activeContext);
-    return filtered;
-  }, [mustDoTasks, activeContext, selectedDate]);
-
-  const filteredUpNext = useMemo(() => {
-    let filtered = upNextTasks.filter(t => !t.due_date || t.due_date <= selectedDate);
-    if (activeContext !== 'all') filtered = filtered.filter(t => t.context_id === activeContext);
-    return filtered;
-  }, [upNextTasks, activeContext, selectedDate]);
+  const categoryTaskLists = useMemo(() => {
+    return categories.map(cat => {
+      let filtered = getTasksByCategory(cat.id).filter(t => !t.due_date || t.due_date <= selectedDate);
+      if (activeContext !== 'all') filtered = filtered.filter(t => t.context_id === activeContext);
+      return { ...cat, tasks: filtered };
+    });
+  }, [categories, getTasksByCategory, activeContext, selectedDate]);
 
   const progress = useMemo(() => {
     const relevantTasks = activeContext === 'all' ? tasks : tasks.filter(t => t.context_id === activeContext);
     const dateCompleted = relevantTasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(selectedDate)).length;
-    const dateMustDo = relevantTasks.filter(t => t.category === 'must_do').length;
-    const total = dateMustDo || 1;
-    return { completed: dateCompleted, total: dateMustDo, percent: Math.round((dateCompleted / total) * 100) };
-  }, [tasks, activeContext, selectedDate]);
+    const firstCatId = categories[0]?.id || 'must_do';
+    const primaryCount = relevantTasks.filter(t => t.category === firstCatId).length;
+    const total = primaryCount || 1;
+    return { completed: dateCompleted, total: primaryCount, percent: Math.round((dateCompleted / total) * 100) };
+  }, [tasks, activeContext, selectedDate, categories]);
 
   const hasHabitsForDate = useMemo(() => {
     return habits.some(h => isHabitDueOnDate(h, selectedDate));
@@ -113,8 +113,8 @@ export default function TodayView() {
             </h2>
             <p>
               {progress.total === 0
-                ? "Add some Must-Do tasks to track your progress."
-                : `${progress.percent}% through your Must-Do list.`}
+                ? `Add some ${categories[0]?.name || 'Must Do'} tasks to track your progress.`
+                : `${progress.percent}% through your ${categories[0]?.name || 'Must Do'} list.`}
             </p>
           </div>
           <div className="progress-ring">
@@ -153,9 +153,12 @@ export default function TodayView() {
         )}
 
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <TaskList title="Must Do" tasks={filteredMustDo} category="must_do" defaultDueDate={selectedDate} draggable droppableId="must_do" onAdd={() => handleAddTask('must_do')} />
-          <div style={{ height: '24px' }} />
-          <TaskList title="Up Next" tasks={filteredUpNext} category="up_next" defaultDueDate={selectedDate} draggable droppableId="up_next" onAdd={() => handleAddTask('up_next')} />
+          {categoryTaskLists.map((cat, i) => (
+            <div key={cat.id}>
+              {i > 0 && <div style={{ height: '24px' }} />}
+              <TaskList title={cat.name} tasks={cat.tasks} category={cat.id} defaultDueDate={selectedDate} draggable droppableId={cat.id} onAdd={() => handleAddTask(cat.id)} />
+            </div>
+          ))}
           <DragOverlay>
             {activeTask ? <div className="drag-overlay"><TaskItem task={activeTask} /></div> : null}
           </DragOverlay>
@@ -164,6 +167,7 @@ export default function TodayView() {
 
       <div className="today-side-column">
         <CalendarWidget selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+        <EventsWidget date={selectedDate} />
         <JournalWidget date={selectedDate} />
       </div>
 

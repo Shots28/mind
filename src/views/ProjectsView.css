@@ -155,20 +155,90 @@
 }
 
 .project-recent-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: var(--text-secondary);
   padding: 6px 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
   border-radius: 6px;
   transition: background 0.15s;
 }
 
 .project-recent-task:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.project-task-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 2px solid var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.project-task-checkbox:hover {
+  border-color: var(--accent-color);
+}
+
+.project-task-checkbox.checked {
+  background: var(--success-color);
+  border-color: var(--success-color);
+  color: white;
+}
+
+.project-task-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.project-task-title:hover {
   color: var(--text-primary);
+}
+
+.project-quick-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.project-quick-add:focus-within {
+  border-color: var(--accent-color);
+  border-style: solid;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.project-quick-add-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.project-quick-add-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-family);
+  outline: none;
+}
+
+.project-quick-add-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 .project-empty-tasks {

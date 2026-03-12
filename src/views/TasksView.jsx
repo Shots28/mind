@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { useTasks } from '../contexts/TaskContext';
 import { useContexts } from '../contexts/ContextContext';
+import { useCategories } from '../contexts/CategoryContext';
 import { useProjects } from '../contexts/ProjectContext';
 import TaskList, { TaskItem } from '../components/Tasks/TaskList';
 import TaskForm from '../components/Tasks/TaskForm';
@@ -13,8 +14,9 @@ import { toLocalDateString } from '../lib/dates';
 import './TasksView.css';
 
 export default function TasksView() {
-  const { mustDoTasks, upNextTasks, completedTasks, updateTask } = useTasks();
+  const { completedTasks, getTasksByCategory, updateTask } = useTasks();
   const { activeContext } = useContexts();
+  const { categories } = useCategories();
   const { projects } = useProjects();
   const [searchParams] = useSearchParams();
   const projectFilter = searchParams.get('project');
@@ -31,19 +33,15 @@ export default function TasksView() {
     setDateFilter(toLocalDateString(d));
   };
 
-  const filteredMustDo = useMemo(() => {
-    let filtered = activeContext === 'all' ? mustDoTasks : mustDoTasks.filter(t => t.context_id === activeContext);
-    if (projectFilter) filtered = filtered.filter(t => t.project_id === projectFilter);
-    if (dateFilter) filtered = filtered.filter(t => t.due_date === dateFilter);
-    return filtered;
-  }, [mustDoTasks, activeContext, projectFilter, dateFilter]);
-
-  const filteredUpNext = useMemo(() => {
-    let filtered = activeContext === 'all' ? upNextTasks : upNextTasks.filter(t => t.context_id === activeContext);
-    if (projectFilter) filtered = filtered.filter(t => t.project_id === projectFilter);
-    if (dateFilter) filtered = filtered.filter(t => t.due_date === dateFilter);
-    return filtered;
-  }, [upNextTasks, activeContext, projectFilter, dateFilter]);
+  const categoryTaskLists = useMemo(() => {
+    return categories.map(cat => {
+      let filtered = getTasksByCategory(cat.id);
+      if (activeContext !== 'all') filtered = filtered.filter(t => t.context_id === activeContext);
+      if (projectFilter) filtered = filtered.filter(t => t.project_id === projectFilter);
+      if (dateFilter) filtered = filtered.filter(t => t.due_date === dateFilter);
+      return { ...cat, tasks: filtered };
+    });
+  }, [categories, getTasksByCategory, activeContext, projectFilter, dateFilter]);
 
   const filteredCompleted = useMemo(() => {
     let filtered = activeContext === 'all' ? completedTasks : completedTasks.filter(t => t.context_id === activeContext);
@@ -52,7 +50,8 @@ export default function TasksView() {
     return filtered;
   }, [completedTasks, activeContext, projectFilter, dateFilter]);
 
-  const allActive = useMemo(() => [...filteredMustDo, ...filteredUpNext], [filteredMustDo, filteredUpNext]);
+  const allActive = useMemo(() => categoryTaskLists.flatMap(c => c.tasks), [categoryTaskLists]);
+  const totalActive = allActive.length;
 
   const projectGroups = useMemo(() => {
     if (groupBy !== 'project') return [];
@@ -132,9 +131,12 @@ export default function TasksView() {
 
       {(filter === 'active' || filter === 'all') && groupBy === 'category' && (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleCategoryDragEnd}>
-          <TaskList title="Must Do" tasks={filteredMustDo} category="must_do" draggable droppableId="must_do" />
-          <div style={{ height: '24px' }} />
-          <TaskList title="Up Next" tasks={filteredUpNext} category="up_next" draggable droppableId="up_next" />
+          {categoryTaskLists.map((cat, i) => (
+            <div key={cat.id}>
+              {i > 0 && <div style={{ height: '24px' }} />}
+              <TaskList title={cat.name} tasks={cat.tasks} category={cat.id} draggable droppableId={cat.id} />
+            </div>
+          ))}
           <DragOverlay>
             {activeTask ? <div className="drag-overlay"><TaskItem task={activeTask} /></div> : null}
           </DragOverlay>
@@ -162,7 +164,7 @@ export default function TasksView() {
         </>
       )}
 
-      {filter === 'active' && filteredMustDo.length === 0 && filteredUpNext.length === 0 && (
+      {filter === 'active' && totalActive === 0 && (
         <EmptyState
           icon={CheckSquare}
           title="No active tasks"

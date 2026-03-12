@@ -136,6 +136,10 @@ export function TaskProvider({ children }) {
     return { completed: todayCompleted, total: todayMustDo, percent: Math.round((todayCompleted / total) * 100) };
   }, [state.tasks, today]);
 
+  const getTasksByCategory = useCallback((categoryId) => {
+    return sortByPriority(state.tasks.filter(t => t.category === categoryId && !t.is_completed));
+  }, [state.tasks]);
+
   return (
     <TaskContext.Provider value={{
       ...state,
@@ -148,6 +152,7 @@ export function TaskProvider({ children }) {
       toggleComplete,
       deleteTask,
       fetchTasks,
+      getTasksByCategory,
     }}>
       {children}
     </TaskContext.Provider>

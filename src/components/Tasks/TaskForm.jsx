@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { useProjects } from '../../contexts/ProjectContext';
+import { useCategories } from '../../contexts/CategoryContext';
 import DatePicker from '../Common/DatePicker';
 import './TaskForm.css';
 
@@ -9,6 +10,7 @@ export default function TaskForm({ task = null, defaultCategory = 'must_do', def
   const { createTask, updateTask } = useTasks();
   const { contexts } = useContexts();
   const { projects } = useProjects();
+  const { categories } = useCategories();
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [priority, setPriority] = useState(task?.priority || 'normal');
@@ -67,8 +69,7 @@ export default function TaskForm({ task = null, defaultCategory = 'must_do', def
         <div className="task-form-field">
           <label>Category</label>
           <select className="input-field" value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="must_do">Must Do</option>
-            <option value="up_next">Up Next</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div className="task-form-field">

@@ -3,6 +3,7 @@ import { Send } from 'lucide-react';
 import { useJournal } from '../../contexts/JournalContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { toLocalDateString } from '../../lib/dates';
+import JournalEntryCard from './JournalEntryCard';
 import './Journal.css';
 
 const JournalWidget = ({ date }) => {
@@ -65,12 +66,7 @@ const JournalWidget = ({ date }) => {
             {dateEntries.length > 0 && (
                 <div className="recent-entries">
                     {dateEntries.map(e => (
-                        <div key={e.id} className="journal-entry">
-                            <div className="entry-time">
-                                {new Date(e.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                            <p className="entry-text">{e.content}</p>
-                        </div>
+                        <JournalEntryCard key={e.id} entry={e} compact />
                     ))}
                 </div>
             )}

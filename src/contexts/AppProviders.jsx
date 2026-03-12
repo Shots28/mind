@@ -1,5 +1,6 @@
 import { AuthProvider } from './AuthContext';
 import { ContextProvider } from './ContextContext';
+import { CategoryProvider } from './CategoryContext';
 import { TaskProvider } from './TaskContext';
 import { JournalProvider } from './JournalContext';
 import { ProjectProvider } from './ProjectContext';
@@ -11,19 +12,21 @@ export default function AppProviders({ children }) {
   return (
     <AuthProvider>
       <ContextProvider>
-        <TaskProvider>
-          <ProjectProvider>
-            <JournalProvider>
-              <EventProvider>
-                <HabitProvider>
-                  <ToastProvider>
-                    {children}
-                  </ToastProvider>
-                </HabitProvider>
-              </EventProvider>
-            </JournalProvider>
-          </ProjectProvider>
-        </TaskProvider>
+        <CategoryProvider>
+          <TaskProvider>
+            <ProjectProvider>
+              <JournalProvider>
+                <EventProvider>
+                  <HabitProvider>
+                    <ToastProvider>
+                      {children}
+                    </ToastProvider>
+                  </HabitProvider>
+                </EventProvider>
+              </JournalProvider>
+            </ProjectProvider>
+          </TaskProvider>
+        </CategoryProvider>
       </ContextProvider>
     </AuthProvider>
   );

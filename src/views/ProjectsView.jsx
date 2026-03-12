@@ -6,7 +6,8 @@ import { useContexts } from '../contexts/ContextContext';
 import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
-import { Plus, FolderOpen, MoreHorizontal, Trash2, Edit3, Archive, Clock, ArrowRight } from 'lucide-react';
+import { Plus, FolderOpen, MoreHorizontal, Trash2, Edit3, Archive, Clock, ArrowRight, Check } from 'lucide-react';
+import { useToast } from '../components/Common/Toast';
 import './ProjectsView.css';
 
 function ProjectForm({ onClose, project = null, contexts }) {
@@ -59,10 +60,111 @@ function ProjectForm({ onClose, project = null, contexts }) {
   );
 }
 
+function ProjectCard({ project, stats, recentTasks, menuOpen, menuRef, setMenuOpen, setEditingProject, setShowForm, updateProject, deleteProject, toggleComplete, createTask, setEditingTask, navigate, showToast }) {
+  const [quickAdd, setQuickAdd] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  const handleQuickAdd = async (e) => {
+    e.preventDefault();
+    if (!quickAdd.trim() || adding) return;
+    setAdding(true);
+    try {
+      await createTask({
+        title: quickAdd.trim(),
+        project_id: project.id,
+        category: 'up_next',
+        context_id: project.context_id || null,
+      });
+      setQuickAdd('');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className="project-card glass-panel" style={{ borderTopColor: project.color }}>
+      <div className="project-card-header">
+        <h3 className="project-card-name">{project.name}</h3>
+        <div className="project-menu-wrapper" ref={menuRef}>
+          <button className="btn-icon" onClick={() => setMenuOpen(menuOpen === project.id ? null : project.id)}>
+            <MoreHorizontal size={18} />
+          </button>
+          {menuOpen === project.id && (
+            <div className="project-menu glass-panel">
+              <button onClick={() => { setEditingProject(project); setShowForm(true); setMenuOpen(null); }}>
+                <Edit3 size={14} /><span>Edit</span>
+              </button>
+              <button onClick={() => { updateProject(project.id, { status: 'archived' }); setMenuOpen(null); }}>
+                <Archive size={14} /><span>Archive</span>
+              </button>
+              <button className="danger" onClick={() => { deleteProject(project.id); setMenuOpen(null); }}>
+                <Trash2 size={14} /><span>Delete</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {project.description && <p className="project-card-desc">{project.description}</p>}
+      <div className="project-card-meta">
+        {project.contexts && <span className="project-context-badge" style={{ color: project.contexts.color }}>{project.contexts.name}</span>}
+        {stats.nearestDue && (
+          <span className="project-due-date">
+            <Clock size={12} />
+            {new Date(stats.nearestDue + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </span>
+        )}
+      </div>
+      <div className="project-card-stats">
+        <div className="project-stat-row">
+          <span className="project-task-count">{stats.total} task{stats.total !== 1 ? 's' : ''}</span>
+          <span className="project-stat-text">{stats.completed} done</span>
+        </div>
+        <div className="project-progress-bar">
+          <div className="project-progress-fill" style={{ width: `${stats.percent}%`, background: project.color }} />
+        </div>
+      </div>
+      {recentTasks.length > 0 ? (
+        <div className="project-recent-tasks">
+          {recentTasks.map(t => (
+            <div key={t.id} className="project-recent-task">
+              <div
+                className={`project-task-checkbox ${t.is_completed ? 'checked' : ''}`}
+                onClick={(e) => { e.stopPropagation(); toggleComplete(t.id, () => showToast('Task completed!')); }}
+              >
+                {t.is_completed && <Check size={10} />}
+              </div>
+              <span className="project-task-title" onClick={() => setEditingTask(t)}>{t.title}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="project-empty-tasks">No active tasks</div>
+      )}
+      <form className="project-quick-add" onSubmit={handleQuickAdd}>
+        <Plus size={14} className="project-quick-add-icon" />
+        <input
+          type="text"
+          className="project-quick-add-input"
+          placeholder="Add task..."
+          value={quickAdd}
+          onChange={(e) => setQuickAdd(e.target.value)}
+          disabled={adding}
+        />
+      </form>
+      <button className="project-view-all" onClick={() => navigate(`/tasks?project=${project.id}`)}>
+        View all tasks <ArrowRight size={14} />
+      </button>
+    </div>
+  );
+}
+
 export default function ProjectsView() {
   const { projects, loading, deleteProject, updateProject } = useProjects();
-  const { tasks } = useTasks();
+  const { tasks, toggleComplete, createTask } = useTasks();
   const { contexts, activeContext } = useContexts();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -108,64 +210,26 @@ export default function ProjectsView() {
         <div className="projects-grid">
           {activeProjects.map(project => {
             const stats = getProjectStats(project.id);
-            const recentTasks = tasks.filter(t => t.project_id === project.id && !t.is_completed).slice(0, 3);
+            const recentTasks = tasks.filter(t => t.project_id === project.id && !t.is_completed).slice(0, 5);
             return (
-              <div key={project.id} className="project-card glass-panel" style={{ borderTopColor: project.color }}>
-                <div className="project-card-header">
-                  <h3 className="project-card-name">{project.name}</h3>
-                  <div className="project-menu-wrapper" ref={menuRef}>
-                    <button className="btn-icon" onClick={() => setMenuOpen(menuOpen === project.id ? null : project.id)}>
-                      <MoreHorizontal size={18} />
-                    </button>
-                    {menuOpen === project.id && (
-                      <div className="project-menu glass-panel">
-                        <button onClick={() => { setEditingProject(project); setShowForm(true); setMenuOpen(null); }}>
-                          <Edit3 size={14} /><span>Edit</span>
-                        </button>
-                        <button onClick={() => { updateProject(project.id, { status: 'archived' }); setMenuOpen(null); }}>
-                          <Archive size={14} /><span>Archive</span>
-                        </button>
-                        <button className="danger" onClick={() => { deleteProject(project.id); setMenuOpen(null); }}>
-                          <Trash2 size={14} /><span>Delete</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {project.description && <p className="project-card-desc">{project.description}</p>}
-                <div className="project-card-meta">
-                  {project.contexts && <span className="project-context-badge" style={{ color: project.contexts.color }}>{project.contexts.name}</span>}
-                  {stats.nearestDue && (
-                    <span className="project-due-date">
-                      <Clock size={12} />
-                      {new Date(stats.nearestDue + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                  )}
-                </div>
-                <div className="project-card-stats">
-                  <div className="project-stat-row">
-                    <span className="project-task-count">{stats.total} task{stats.total !== 1 ? 's' : ''}</span>
-                    <span className="project-stat-text">{stats.completed} done</span>
-                  </div>
-                  <div className="project-progress-bar">
-                    <div className="project-progress-fill" style={{ width: `${stats.percent}%`, background: project.color }} />
-                  </div>
-                </div>
-                {recentTasks.length > 0 ? (
-                  <div className="project-recent-tasks">
-                    {recentTasks.map(t => (
-                      <div key={t.id} className="project-recent-task" onClick={() => setEditingTask(t)}>
-                        {t.title}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="project-empty-tasks">No active tasks</div>
-                )}
-                <button className="project-view-all" onClick={() => navigate(`/tasks?project=${project.id}`)}>
-                  View all tasks <ArrowRight size={14} />
-                </button>
-              </div>
+              <ProjectCard
+                key={project.id}
+                project={project}
+                stats={stats}
+                recentTasks={recentTasks}
+                menuOpen={menuOpen}
+                menuRef={menuRef}
+                setMenuOpen={setMenuOpen}
+                setEditingProject={setEditingProject}
+                setShowForm={setShowForm}
+                updateProject={updateProject}
+                deleteProject={deleteProject}
+                toggleComplete={toggleComplete}
+                createTask={createTask}
+                setEditingTask={setEditingTask}
+                navigate={navigate}
+                showToast={showToast}
+              />
             );
           })}
         </div>

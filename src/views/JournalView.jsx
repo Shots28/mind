@@ -1,49 +1,10 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useJournal } from '../contexts/JournalContext';
 import { useContexts } from '../contexts/ContextContext';
+import JournalEntryCard from '../components/Journal/JournalEntryCard';
 import EmptyState from '../components/Common/EmptyState';
-import { Send, BookOpen, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, BookOpen } from 'lucide-react';
 import './JournalView.css';
-
-const MAX_HEIGHT = 150;
-
-function JournalEntryCard({ entry, onDelete }) {
-  const contentRef = useRef(null);
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-
-  useEffect(() => {
-    if (contentRef.current) {
-      setOverflows(contentRef.current.scrollHeight > MAX_HEIGHT);
-    }
-  }, [entry.content]);
-
-  return (
-    <div className="journal-history-entry glass-panel">
-      <div className="journal-entry-header">
-        <span className="journal-entry-time">
-          {new Date(entry.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-        </span>
-        {entry.contexts?.name && (
-          <span className="journal-entry-context" style={{ color: entry.contexts.color }}>{entry.contexts.name}</span>
-        )}
-        <button className="btn-icon" onClick={() => onDelete(entry.id)}><Trash2 size={14} /></button>
-      </div>
-      <div
-        ref={contentRef}
-        className={`journal-entry-body ${!expanded && overflows ? 'clamped' : ''}`}
-        style={!expanded && overflows ? { maxHeight: MAX_HEIGHT } : undefined}
-      >
-        <p className="journal-entry-content">{entry.content}</p>
-      </div>
-      {overflows && (
-        <button className="journal-expand-btn" onClick={() => setExpanded(!expanded)}>
-          {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show more</>}
-        </button>
-      )}
-    </div>
-  );
-}
 
 export default function JournalView() {
   const { entries, loading, createEntry, deleteEntry } = useJournal();

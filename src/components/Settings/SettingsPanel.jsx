@@ -1,9 +1,57 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useContexts } from '../../contexts/ContextContext';
+import { useCategories } from '../../contexts/CategoryContext';
+import { getUserTimezone, TIMEZONE_OPTIONS } from '../../lib/dates';
 import Modal from '../Common/Modal';
-import { LogOut, Plus, Trash2, Edit3, Check, X } from 'lucide-react';
+import { LogOut, Plus, Trash2, Edit3, Check, X, Globe } from 'lucide-react';
 import './SettingsPanel.css';
+
+function TimezoneSettings() {
+    const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const [timezone, setTimezone] = useState(getUserTimezone());
+    const isOverridden = localStorage.getItem('mind_timezone_override') !== null;
+
+    const handleChange = (value) => {
+        if (value === detectedTz) {
+            localStorage.removeItem('mind_timezone_override');
+        } else {
+            localStorage.setItem('mind_timezone_override', value);
+        }
+        setTimezone(value);
+    };
+
+    return (
+        <div className="settings-section">
+            <h3 className="settings-section-title">
+                <Globe size={16} /> Timezone
+            </h3>
+            <p className="settings-hint">Detected: {detectedTz}</p>
+            <select
+                className="input-field"
+                value={timezone}
+                onChange={(e) => handleChange(e.target.value)}
+            >
+                {!TIMEZONE_OPTIONS.includes(detectedTz) && (
+                    <option value={detectedTz}>{detectedTz} (detected)</option>
+                )}
+                {TIMEZONE_OPTIONS.map(tz => (
+                    <option key={tz} value={tz}>
+                        {tz.replace(/_/g, ' ')}{tz === detectedTz ? ' (detected)' : ''}
+                    </option>
+                ))}
+            </select>
+            {isOverridden && timezone !== detectedTz && (
+                <button
+                    className="settings-reset-btn"
+                    onClick={() => { localStorage.removeItem('mind_timezone_override'); setTimezone(detectedTz); }}
+                >
+                    Reset to detected
+                </button>
+            )}
+        </div>
+    );
+}
 
 function ContextManager() {
     const { contexts, createContext, updateContext, deleteContext } = useContexts();
@@ -93,6 +141,76 @@ function ContextManager() {
     );
 }
 
+function CategoryManager() {
+    const { categories, addCategory, updateCategory, removeCategory } = useCategories();
+    const [newName, setNewName] = useState('');
+    const [editingId, setEditingId] = useState(null);
+    const [editName, setEditName] = useState('');
+
+    const handleAdd = (e) => {
+        e.preventDefault();
+        if (!newName.trim()) return;
+        addCategory(newName.trim());
+        setNewName('');
+    };
+
+    const handleSaveEdit = (id) => {
+        if (!editName.trim()) return;
+        updateCategory(id, editName.trim());
+        setEditingId(null);
+    };
+
+    return (
+        <div className="context-manager">
+            <h3 className="settings-section-title">Task Categories</h3>
+            <div className="context-list">
+                {categories.map(cat => (
+                    <div key={cat.id} className="context-item">
+                        {editingId === cat.id ? (
+                            <div className="context-edit-row">
+                                <input
+                                    type="text"
+                                    className="input-field"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(cat.id)}
+                                    autoFocus
+                                />
+                                <button className="btn-icon" onClick={() => handleSaveEdit(cat.id)}><Check size={14} /></button>
+                                <button className="btn-icon" onClick={() => setEditingId(null)}><X size={14} /></button>
+                            </div>
+                        ) : (
+                            <>
+                                <span className="context-item-name">{cat.name}</span>
+                                <div className="context-item-actions">
+                                    <button className="btn-icon" onClick={() => { setEditingId(cat.id); setEditName(cat.name); }}><Edit3 size={14} /></button>
+                                    {!cat.isDefault && (
+                                        <button className="btn-icon" onClick={() => removeCategory(cat.id)}><Trash2 size={14} /></button>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <form className="context-add-form" onSubmit={handleAdd}>
+                <div className="context-add-row">
+                    <input
+                        type="text"
+                        className="input-field"
+                        placeholder="New category name..."
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                    />
+                    <button type="submit" className="btn-primary" disabled={!newName.trim()}>
+                        <Plus size={16} />
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+}
+
 export default function SettingsPanel({ isOpen, onClose }) {
     const { user, signOut } = useAuth();
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -122,7 +240,15 @@ export default function SettingsPanel({ isOpen, onClose }) {
 
                 <div className="settings-divider" />
 
+                <TimezoneSettings />
+
+                <div className="settings-divider" />
+
                 <ContextManager />
+
+                <div className="settings-divider" />
+
+                <CategoryManager />
 
                 <div className="settings-divider" />
 

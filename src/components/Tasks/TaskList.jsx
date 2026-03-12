@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Check, MoreHorizontal, AlertCircle, Trash2, Edit3, ArrowUpDown, Plus, GripVertical } from 'lucide-react';
+import { Check, MoreHorizontal, AlertCircle, Trash2, Edit3, ArrowUpDown, Plus, GripVertical, ChevronDown } from 'lucide-react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useTasks } from '../../contexts/TaskContext';
 import { useContexts } from '../../contexts/ContextContext';
+import { useCategories } from '../../contexts/CategoryContext';
 import { useToast } from '../Common/Toast';
 import TaskForm from './TaskForm';
 import Modal from '../Common/Modal';
@@ -29,6 +30,7 @@ const DraggableWrapper = ({ id, data, children }) => {
 
 const TaskItem = ({ task }) => {
     const { toggleComplete, deleteTask, updateTask } = useTasks();
+    const { categories } = useCategories();
     const { showToast } = useToast();
     const [menuOpen, setMenuOpen] = useState(false);
     const [editing, setEditing] = useState(false);
@@ -94,12 +96,14 @@ const TaskItem = ({ task }) => {
                             <button onClick={() => { setEditing(true); setMenuOpen(false); }}>
                                 <Edit3 size={14} /><span>Edit</span>
                             </button>
-                            <button onClick={() => {
-                                updateTask(task.id, { category: task.category === 'must_do' ? 'up_next' : 'must_do' });
-                                setMenuOpen(false);
-                            }}>
-                                <ArrowUpDown size={14} /><span>Move to {task.category === 'must_do' ? 'Up Next' : 'Must Do'}</span>
-                            </button>
+                            {categories.filter(c => c.id !== task.category).map(c => (
+                                <button key={c.id} onClick={() => {
+                                    updateTask(task.id, { category: c.id });
+                                    setMenuOpen(false);
+                                }}>
+                                    <ArrowUpDown size={14} /><span>Move to {c.name}</span>
+                                </button>
+                            ))}
                             <button className="danger" onClick={() => { deleteTask(task.id); setMenuOpen(false); }}>
                                 <Trash2 size={14} /><span>Delete</span>
                             </button>
@@ -124,11 +128,12 @@ const DroppableList = ({ droppableId, children }) => {
     );
 };
 
-const TaskList = ({ tasks, title, category, defaultDueDate, draggable = false, droppableId }) => {
+const TaskList = ({ tasks, title, category, defaultDueDate, draggable = false, droppableId, collapsible = true }) => {
     const { createTask } = useTasks();
     const { activeContext } = useContexts();
     const [quickAdd, setQuickAdd] = useState('');
     const [adding, setAdding] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
 
     const handleQuickAdd = async (e) => {
         e.preventDefault();
@@ -177,20 +182,34 @@ const TaskList = ({ tasks, title, category, defaultDueDate, draggable = false, d
         </form>
     );
 
+    const listContent = collapsed ? null : (
+        <>
+            {emptyState}
+            {taskItems}
+            {quickAddForm}
+        </>
+    );
+
     return (
         <div className="task-list-container">
-            {title && <h3 className="section-title">{title}</h3>}
+            {title && (
+                <div className={`section-header ${collapsible ? 'collapsible' : ''}`} onClick={collapsible ? () => setCollapsed(!collapsed) : undefined}>
+                    <h3 className="section-title">
+                        {title}
+                        {tasks.length > 0 && <span className="section-count">{tasks.length}</span>}
+                    </h3>
+                    {collapsible && (
+                        <ChevronDown size={16} className={`section-chevron ${collapsed ? '' : 'expanded'}`} />
+                    )}
+                </div>
+            )}
             {draggable ? (
                 <DroppableList droppableId={droppableId || category}>
-                    {emptyState}
-                    {taskItems}
-                    {quickAddForm}
+                    {listContent}
                 </DroppableList>
             ) : (
                 <div className="task-list">
-                    {emptyState}
-                    {taskItems}
-                    {quickAddForm}
+                    {listContent}
                 </div>
             )}
         </div>

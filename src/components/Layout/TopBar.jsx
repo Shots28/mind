@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, ChevronDown, LogOut } from 'lucide-react';
+import { Search, ChevronDown, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { useTasks } from '../../contexts/TaskContext';
 import NotificationPanel from '../Notifications/NotificationPanel';
+import SettingsPanel from '../Settings/SettingsPanel';
 import './Layout.css';
 
 const routeTitles = {
@@ -25,6 +26,7 @@ const TopBar = () => {
     const [showContextMenu, setShowContextMenu] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearchResults, setShowSearchResults] = useState(false);
     const contextMenuRef = useRef(null);
@@ -138,6 +140,10 @@ const TopBar = () => {
                                 <span className="user-dropdown-email">{user?.email}</span>
                             </div>
                             <div className="user-dropdown-divider" />
+                            <button className="user-dropdown-item" onClick={() => { setShowSettings(true); setShowUserMenu(false); }}>
+                                <Settings size={16} />
+                                <span>Settings</span>
+                            </button>
                             <button className="user-dropdown-item" onClick={handleSignOut}>
                                 <LogOut size={16} />
                                 <span>Sign Out</span>
@@ -146,6 +152,7 @@ const TopBar = () => {
                     )}
                 </div>
             </div>
+            <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
         </header>
     );
 };
