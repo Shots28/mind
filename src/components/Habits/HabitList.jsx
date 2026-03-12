@@ -37,9 +37,9 @@ export default function HabitList({ compact = false, date }) {
         return (
           <div key={habit.id} className={`habit-item ${done ? 'completed' : ''}`}>
             <div
-              className={`habit-toggle ${done ? 'checked' : ''} ${!isToday ? 'read-only' : ''}`}
+              className={`habit-toggle ${done ? 'checked' : ''}`}
               style={{ borderColor: habit.color, background: done ? habit.color : 'transparent' }}
-              onClick={isToday ? () => toggleHabitLog(habit.id) : undefined}
+              onClick={() => toggleHabitLog(habit.id, isToday ? undefined : date)}
             />
             <div className="habit-info">
               <span className="habit-title">{habit.title}</span>

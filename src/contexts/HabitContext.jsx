@@ -151,19 +151,32 @@ export function HabitProvider({ children }) {
     return state.dateLogs[dateStr] || [];
   }, [state.dateLogs]);
 
-  const toggleHabitLog = async (habitId) => {
+  const toggleHabitLog = async (habitId, date) => {
+    const targetDate = date || toLocalDateString();
     const today = toLocalDateString();
-    const existing = state.todayLogs.find(l => l.habit_id === habitId);
+    const isToday = targetDate === today;
+    const logs = isToday ? state.todayLogs : (state.dateLogs[targetDate] || []);
+    const existing = logs.find(l => l.habit_id === habitId);
     if (existing) {
-      dispatch({ type: 'REMOVE_LOG', payload: existing.id });
+      if (isToday) {
+        dispatch({ type: 'REMOVE_LOG', payload: existing.id });
+      } else {
+        dispatch({ type: 'SET_DATE_LOGS', payload: { date: targetDate, logs: logs.filter(l => l.id !== existing.id) } });
+      }
       await supabase.from('habit_logs').delete().eq('id', existing.id);
     } else {
       const { data, error } = await supabase
         .from('habit_logs')
-        .insert({ habit_id: habitId, user_id: user.id, date: today })
+        .insert({ habit_id: habitId, user_id: user.id, date: targetDate })
         .select()
         .single();
-      if (!error) dispatch({ type: 'ADD_LOG', payload: data });
+      if (!error) {
+        if (isToday) {
+          dispatch({ type: 'ADD_LOG', payload: data });
+        } else {
+          dispatch({ type: 'SET_DATE_LOGS', payload: { date: targetDate, logs: [...logs, data] } });
+        }
+      }
     }
     fetchWeekLogs();
   };
