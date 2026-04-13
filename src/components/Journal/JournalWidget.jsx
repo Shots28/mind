@@ -55,7 +55,7 @@ const JournalWidget = ({ date }) => {
                     onKeyDown={handleKeyDown}
                 />
                 <div className="journal-actions">
-                    <span className="journal-hint">⌘+Enter</span>
+                    <span className="journal-hint">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+Enter</span>
                     <button
                         className="btn-primary journal-submit"
                         onClick={handleSubmit}

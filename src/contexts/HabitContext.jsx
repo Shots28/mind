@@ -41,8 +41,7 @@ function reducer(state, action) {
 }
 
 function isHabitDueToday(habit) {
-  const day = new Date().getDay(); // 0=Sun
-  return isHabitDueOnDay(habit, day);
+  return isHabitDueOnDate(habit, toLocalDateString());
 }
 
 export function isHabitDueOnDate(habit, dateStr) {
