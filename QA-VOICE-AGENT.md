@@ -171,6 +171,59 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 
 ---
 
+## QA Round 3 — Additional Bugs Found & Fixed
+
+### 10. UTC Timezone Bug in Voice Agent Context (Critical)
+
+**Symptom:** If a user in America/Denver gets called at 9 PM local time, the AI system prompt would say the wrong date and check the wrong day's habits.
+
+**Root Cause:** `getUserContext()` used `new Date().toISOString().split("T")[0]` and `new Date().getDay()` for date and day-of-week, which are UTC-based. A 9 PM Denver call is 3 AM UTC the next day, so the system prompt would say "Today is Tuesday" when the user is still on Monday, and check Tuesday's habits instead of Monday's.
+
+**Fix:** 
+- `getUserContext()` now accepts an optional `timezone` parameter and uses `toLocaleDateString("en-CA", { timeZone })` and `Intl.DateTimeFormat` for timezone-correct date/day.
+- `buildAssistantConfig()` now fetches the user's timezone from `call_preferences` and passes it to `getUserContext()`.
+- Added `getUserLocalDate()` helper for `markHabitDone()` so habits are logged to the correct local date during calls.
+
+**Files:** `supabase/functions/_shared/agent-actions.ts`, `supabase/functions/_shared/assistant-config.ts`
+
+---
+
+### 11. Journal View Shows "Ctrl+Enter" on Mac (Minor)
+
+**Symptom:** The Journal view's compose area shows "Ctrl+Enter to submit" and the empty state tip says "Use Ctrl+Enter to submit quickly" — but on Mac it should say "⌘+Enter" (matching the Today view's Capture Thought widget).
+
+**Root Cause:** Hardcoded "Ctrl+Enter" string in `JournalView.jsx`, while `JournalWidget.jsx` correctly uses "⌘+Enter".
+
+**Fix:** Changed to platform-aware hint using `navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'`.
+
+**File:** `src/views/JournalView.jsx`
+
+---
+
+## QA Round 3 — Additional Features Verified
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Active toggle — off | Pass | Toggle turns grey, Call Me Now disabled |
+| Active toggle — persistence | Pass | Survives page reload |
+| Voice change | Pass | Changed to Rachel, label updated, persists across reload |
+| Context filter dropdown | Pass | Opens, shows All Contexts + Work (newly created) |
+| Context — create | Pass | "Work" context created, appears in dropdown immediately |
+| Calendar — Month view | Pass | Today highlighted, tasks on day panel |
+| Calendar — Week view | Pass | Sun-Sat columns, tasks visible on today |
+| Calendar — Day view | Pass | Events + Tasks sections, + buttons for both |
+| Calendar — New Event modal | Pass | Pre-fills correct date, All day toggle, context picker |
+| Habits view — progress chart | Pass | 7-day bars, 50% today, streak counters |
+| Habits view — all habits list | Pass | Shows both habits with "Daily" frequency |
+| Journal — Cmd+Enter capture | Pass | Saved at 01:16 PM, toast shown, field cleared |
+| Journal — entries grouped | Pass | "MONDAY, APRIL 13, 2026" header, timestamps |
+| Past day navigation | Pass | Arrow navigates to Apr 12, "Today" link returns |
+| Habit toggle on past day | Pass | Exercise toggled for Apr 12, 50% updated |
+| Notification bell | Pass | Shows 3 items: 1 due today + 2 completed |
+| "+ New" sidebar button | Pass | Opens full New Task modal with all fields |
+
+---
+
 ## Lessons Learned
 
 1. **Always check the actual webhook payload format** - VAPI's docs show `tool-calls` with `toolCallList[]`, not `function-call` with `functionCall`. Don't assume payload shapes from other providers (OpenAI).
@@ -186,3 +239,7 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 6. **Test calls need different guards than CRON calls** - "Call Me Now" is a user-initiated action that should always work. Duplicate-per-day and monthly-limit checks are for automated scheduling only. Mixing the two code paths without branching causes test calls to silently fail.
 
 7. **Check response bodies, not just status codes** - A 200 OK with `{ scheduled: 0 }` is functionally a failure for the user. Always inspect the payload when the semantics matter.
+
+8. **Always use user timezone for date calculations** - Edge functions run in UTC. Any date-sensitive logic (habits, "today", day-of-week) must use the user's stored timezone. A 9 PM Mountain Time call is 3 AM UTC the next day — without timezone-aware dates, the AI sees wrong habits and wrong date.
+
+9. **Platform-aware UI hints** - Keyboard shortcut hints should detect the platform. Hardcoding "Ctrl" breaks Mac UX where users expect "⌘".
