@@ -1,48 +1,88 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-admin.ts";
+import { corsHeaders, handleCors } from "../_shared/cors.ts";
+import { buildAssistantConfig } from "../_shared/assistant-config.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const VAPI_API_URL = "https://api.vapi.ai/call/phone";
 const MONTHLY_CALL_LIMIT = 30;
 
 Deno.serve(async (req: Request) => {
-  // Only allow POST with service role key (from CRON)
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
   const authHeader = req.headers.get("Authorization");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!authHeader || !authHeader.includes(serviceKey || "")) {
-    return new Response("Unauthorized", { status: 401 });
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+
+  // Parse body for test_user_id
+  let body: { test_user_id?: string } = {};
+  try {
+    body = await req.json();
+  } catch {
+    // No body or invalid JSON — that's fine for CRON calls
+  }
+
+  let testUserId: string | null = null;
+
+  if (body.test_user_id) {
+    // Test call mode: verify the user's JWT
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token || !supabaseUrl) {
+      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    }
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user || user.id !== body.test_user_id) {
+      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    }
+    testUserId = user.id;
+  } else {
+    // CRON mode: require service role key
+    if (!authHeader || !authHeader.includes(serviceKey || "")) {
+      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    }
   }
 
   const vapiKey = Deno.env.get("VAPI_API_KEY");
   const vapiPhoneNumberId = Deno.env.get("VAPI_PHONE_NUMBER_ID");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
 
   if (!vapiKey || !vapiPhoneNumberId) {
     console.error("VAPI_API_KEY or VAPI_PHONE_NUMBER_ID not set");
-    return new Response("Not configured", { status: 500 });
+    return new Response("Not configured", { status: 500, headers: corsHeaders });
   }
 
   const admin = getSupabaseAdmin();
   const now = new Date();
 
-  // Get all active users with verified phones
-  const { data: users, error } = await admin
+  // Get users to schedule
+  let query = admin
     .from("call_preferences")
     .select("user_id, phone_number, timezone, preferred_call_time, call_frequency, call_days")
     .eq("is_active", true)
     .eq("phone_verified", true)
     .eq("onboarding_completed", true);
 
+  if (testUserId) {
+    query = query.eq("user_id", testUserId);
+  }
+
+  const { data: users, error } = await query;
+
   if (error || !users) {
     console.error("Failed to fetch users:", error);
-    return new Response("Error", { status: 500 });
+    return new Response("Error", { status: 500, headers: corsHeaders });
   }
 
   let scheduled = 0;
 
   for (const user of users) {
     try {
-      // Check if this is the right time for this user
-      if (!isUserDueForCall(user, now)) continue;
+      // Skip time check for test calls
+      if (!testUserId && !isUserDueForCall(user, now)) continue;
 
       // Check no call already scheduled/completed today
       const userToday = getUserLocalDate(now, user.timezone);
@@ -84,6 +124,21 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // Build assistant config from shared module
+      const { data: prefs } = await admin
+        .from("call_preferences")
+        .select("voice_id")
+        .eq("user_id", user.user_id)
+        .single();
+
+      const webhookUrl = `${supabaseUrl}/functions/v1/ai-vapi-webhook`;
+      const assistantConfig = await buildAssistantConfig(
+        user.user_id,
+        call.id,
+        webhookUrl,
+        prefs?.voice_id
+      );
+
       // Dispatch VAPI outbound call
       const vapiResp = await fetch(VAPI_API_URL, {
         method: "POST",
@@ -94,13 +149,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           phoneNumberId: vapiPhoneNumberId,
           customer: { number: user.phone_number },
-          assistantOverrides: {
-            serverUrl: `${supabaseUrl}/functions/v1/ai-vapi-webhook`,
-            metadata: {
-              userId: user.user_id,
-              callId: call.id,
-            },
-          },
+          assistant: assistantConfig,
         }),
       });
 
@@ -126,7 +175,7 @@ Deno.serve(async (req: Request) => {
 
   return new Response(
     JSON.stringify({ scheduled, total_users: users.length }),
-    { status: 200, headers: { "Content-Type": "application/json" } }
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
 
@@ -221,3 +270,4 @@ function isUserDueForCall(
       return true;
   }
 }
+

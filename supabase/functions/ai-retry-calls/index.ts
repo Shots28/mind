@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { getSupabaseAdmin } from "../_shared/supabase-admin.ts";
+import { buildAssistantConfig } from "../_shared/assistant-config.ts";
 
 const VAPI_API_URL = "https://api.vapi.ai/call/phone";
 const MAX_RETRIES = 2;
@@ -52,10 +53,10 @@ Deno.serve(async (req: Request) => {
 
   for (const call of calls) {
     try {
-      // Get user's phone number
+      // Get user's preferences
       const { data: prefs } = await admin
         .from("call_preferences")
-        .select("phone_number")
+        .select("phone_number, voice_id")
         .eq("user_id", call.user_id)
         .eq("is_active", true)
         .single();
@@ -72,6 +73,15 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", call.id);
 
+      // Build assistant config from shared module
+      const webhookUrl = `${supabaseUrl}/functions/v1/ai-vapi-webhook`;
+      const assistantConfig = await buildAssistantConfig(
+        call.user_id,
+        call.id,
+        webhookUrl,
+        prefs?.voice_id
+      );
+
       // Re-dispatch via VAPI
       const vapiResp = await fetch(VAPI_API_URL, {
         method: "POST",
@@ -82,13 +92,7 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           phoneNumberId: vapiPhoneNumberId,
           customer: { number: prefs.phone_number },
-          assistantOverrides: {
-            serverUrl: `${supabaseUrl}/functions/v1/ai-vapi-webhook`,
-            metadata: {
-              userId: call.user_id,
-              callId: call.id,
-            },
-          },
+          assistant: assistantConfig,
         }),
       });
 
