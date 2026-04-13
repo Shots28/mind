@@ -44,6 +44,9 @@ function matchesByDay(date, byDay) {
  */
 export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences = 200) {
   if (!event.recurrence_rule) return [event];
+  // Google delivers each instance as its own event row — don't re-expand
+  // or the calendar shows duplicated occurrences.
+  if (event.source === 'google') return [event];
 
   const rule = parseRRule(event.recurrence_rule);
   const freq = rule.FREQ;
@@ -68,9 +71,17 @@ export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences
 
   const rStart = new Date(rangeStart);
   const rEnd = new Date(rangeEnd);
-  // Extend rEnd to include the full end day (rangeEnd parses as midnight UTC,
-  // but event times may be later in the day)
-  rEnd.setDate(rEnd.getDate() + 1);
+  // If rangeEnd parsed to midnight UTC (date-only input), extend to the
+  // end of that same day so event times later in the day are included.
+  // Do NOT extend a full day — that leaked a bonus occurrence past the range.
+  if (
+    rEnd.getUTCHours() === 0 &&
+    rEnd.getUTCMinutes() === 0 &&
+    rEnd.getUTCSeconds() === 0 &&
+    rEnd.getUTCMilliseconds() === 0
+  ) {
+    rEnd.setUTCHours(23, 59, 59, 999);
+  }
 
   while (current <= rEnd && occurrenceCount < maxOccurrences) {
     if (until && current > until) break;
