@@ -1,10 +1,20 @@
 import { getSupabaseAdmin } from "./supabase-admin.ts";
 
 // Get user's current context for building the AI system prompt
-export async function getUserContext(userId: string) {
+export async function getUserContext(userId: string, timezone?: string) {
   const admin = getSupabaseAdmin();
-  const today = new Date().toISOString().split("T")[0];
-  const dayOfWeek = new Date().getDay(); // 0=Sun
+  const now = new Date();
+
+  // Use user's timezone for date/day calculations to avoid UTC mismatch
+  // e.g., 9 PM Denver = 3 AM UTC next day — without this, habits/date would be wrong
+  const tz = timezone || "UTC";
+  const today = now.toLocaleDateString("en-CA", { timeZone: tz }); // YYYY-MM-DD
+  const dayStr = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(now);
+  const dayMap: Record<string, number> = {
+    Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
+    Thursday: 4, Friday: 5, Saturday: 6,
+  };
+  const dayOfWeek = dayMap[dayStr] ?? now.getDay();
 
   // Fetch habits, today's logs, pending tasks, and last journal entry in parallel
   const [habitsRes, logsRes, tasksRes, journalRes] = await Promise.all([
@@ -85,10 +95,22 @@ export async function getUserContext(userId: string) {
   };
 }
 
+// Get user's local date in YYYY-MM-DD format
+async function getUserLocalDate(userId: string): Promise<string> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("call_preferences")
+    .select("timezone")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const tz = data?.timezone || "UTC";
+  return new Date().toLocaleDateString("en-CA", { timeZone: tz });
+}
+
 // Mark a habit as done for today
 export async function markHabitDone(userId: string, habitName: string) {
   const admin = getSupabaseAdmin();
-  const today = new Date().toISOString().split("T")[0];
+  const today = await getUserLocalDate(userId);
 
   // Find matching habit (case-insensitive)
   const { data: habits } = await admin

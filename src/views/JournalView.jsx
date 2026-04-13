@@ -59,7 +59,7 @@ export default function JournalView() {
           rows={4}
         />
         <div className="journal-compose-footer">
-          <span className="journal-hint">Ctrl+Enter to submit</span>
+          <span className="journal-hint">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to submit</span>
           <button className="btn-primary" onClick={handleSubmit} disabled={!content.trim() || submitting}>
             <Send size={16} />
             <span>{submitting ? 'Logging...' : 'Log'}</span>
@@ -69,7 +69,7 @@ export default function JournalView() {
 
       <div className="journal-history">
         {groupedEntries.length === 0 && !loading ? (
-          <EmptyState icon={BookOpen} title="No journal entries yet" description="Capture thoughts, reflections, and quick notes as they come." tips={["Tip: Use Ctrl+Enter to submit quickly."]} />
+          <EmptyState icon={BookOpen} title="No journal entries yet" description="Capture thoughts, reflections, and quick notes as they come." tips={[`Tip: Use ${navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to submit quickly.`]} />
         ) : (
           groupedEntries.map(([date, dayEntries]) => (
             <div key={date} className="journal-day-group">

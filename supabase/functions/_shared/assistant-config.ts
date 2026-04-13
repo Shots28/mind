@@ -196,7 +196,14 @@ export async function buildAssistantConfig(
     userData?.user?.email?.split("@")[0] ||
     "there";
 
-  const context = await getUserContext(userId);
+  // Fetch user's timezone for correct date/day-of-week in system prompt
+  const { data: prefData } = await admin
+    .from("call_preferences")
+    .select("timezone")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const context = await getUserContext(userId, prefData?.timezone);
   const systemPrompt = buildSystemPrompt(userName, context);
 
   return {
