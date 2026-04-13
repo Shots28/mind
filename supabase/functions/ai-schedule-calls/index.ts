@@ -84,29 +84,33 @@ Deno.serve(async (req: Request) => {
       // Skip time check for test calls
       if (!testUserId && !isUserDueForCall(user, now)) continue;
 
-      // Check no call already scheduled/completed today
       const userToday = getUserLocalDate(now, user.timezone);
-      const { data: existingCalls } = await admin
-        .from("calls")
-        .select("id")
-        .eq("user_id", user.user_id)
-        .gte("scheduled_at", `${userToday}T00:00:00`)
-        .lt("scheduled_at", `${userToday}T23:59:59`)
-        .not("status", "in", '("failed","no-answer")')
-        .limit(1);
 
-      if (existingCalls && existingCalls.length > 0) continue;
+      // Skip duplicate and limit checks for test calls
+      if (!testUserId) {
+        // Check no call already scheduled/completed today
+        const { data: existingCalls } = await admin
+          .from("calls")
+          .select("id")
+          .eq("user_id", user.user_id)
+          .gte("scheduled_at", `${userToday}T00:00:00`)
+          .lt("scheduled_at", `${userToday}T23:59:59`)
+          .not("status", "in", '("failed","no-answer")')
+          .limit(1);
 
-      // Check monthly limit
-      const monthStart = `${userToday.substring(0, 7)}-01`;
-      const { count } = await admin
-        .from("calls")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.user_id)
-        .gte("scheduled_at", monthStart)
-        .eq("status", "completed");
+        if (existingCalls && existingCalls.length > 0) continue;
 
-      if ((count || 0) >= MONTHLY_CALL_LIMIT) continue;
+        // Check monthly limit
+        const monthStart = `${userToday.substring(0, 7)}-01`;
+        const { count } = await admin
+          .from("calls")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.user_id)
+          .gte("scheduled_at", monthStart)
+          .eq("status", "completed");
+
+        if ((count || 0) >= MONTHLY_CALL_LIMIT) continue;
+      }
 
       // Create call record
       const { data: call, error: callError } = await admin
@@ -216,31 +220,7 @@ function isUserDueForCall(
   // Within 0-4 minutes after preferred time
   if (diff < 0 || diff >= 5) return false;
 
-  // Check day of week
-  const dayOfWeek = parseInt(
-    now.toLocaleDateString("en-US", {
-      timeZone: user.timezone,
-      weekday: "narrow",
-    }) === "S"
-      ? // Need a more reliable method
-        new Intl.DateTimeFormat("en-US", {
-          timeZone: user.timezone,
-          weekday: "short",
-        })
-          .format(now)
-          .charAt(0) === "S"
-        ? (() => {
-            const day = new Intl.DateTimeFormat("en-US", {
-              timeZone: user.timezone,
-              weekday: "long",
-            }).format(now);
-            return day === "Sunday" ? "0" : "6";
-          })()
-        : "0"
-      : "0"
-  );
-
-  // Simpler approach: get day of week in user's timezone
+  // Get day of week in user's timezone
   const dayStr = new Intl.DateTimeFormat("en-US", {
     timeZone: user.timezone,
     weekday: "long",

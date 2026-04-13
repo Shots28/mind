@@ -136,6 +136,8 @@ export function VoiceAgentProvider({ children }) {
       }
     );
     if (!resp.ok) throw new Error('Failed to trigger test call');
+    const result = await resp.json();
+    if (result.scheduled === 0) throw new Error('Call could not be scheduled. Check your phone number and settings.');
     await fetchCalls();
   };
 
