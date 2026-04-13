@@ -224,6 +224,41 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 
 ---
 
+## QA Round 4 — Additional Bugs Found & Fixed
+
+### 12. No CRON Trigger for Automated Calls (Critical — Root Cause of "No Call Received")
+
+**Symptom:** User set up AI check-ins with a 1:30 PM daily call time, but never received a call. Only "Call Me Now" (manual test) worked.
+
+**Root Cause:** The `ai-schedule-calls` and `ai-retry-calls` Supabase edge functions existed and worked correctly, but **nothing was triggering them automatically**. No CRON job, no pg_cron, no Vercel cron — the scheduler had no trigger. Only manual "Call Me Now" calls worked because those hit the function directly from the frontend.
+
+**Fix:** Created Vercel CRON job handlers:
+- `api/cron-schedule-calls.js` — runs every 5 minutes, proxies to `ai-schedule-calls` edge function with service role key auth
+- `api/cron-retry-calls.js` — runs every 15 minutes, proxies to `ai-retry-calls` edge function
+- Updated `vercel.json` with CRON schedules and fixed rewrite rule to exclude `/api/` paths
+
+**Note:** Every-5-minute CRON requires Vercel Pro plan. Hobby plan supports daily only.
+
+**Prerequisite:** `SUPABASE_SERVICE_ROLE_KEY` must be added to Vercel environment variables.
+
+**Files:** `api/cron-schedule-calls.js` (new), `api/cron-retry-calls.js` (new), `vercel.json` (modified)
+
+---
+
+## QA Round 4 — Additional Features Verified
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Tasks — Active filter | Pass | Shows 1 active task |
+| Tasks — Completed filter | Pass | Shows 2 completed with green checks, strikethrough |
+| Tasks — All filter | Pass | Shows all 3 tasks |
+| Tasks — By Project grouping | Pass | "NO PROJECT" and "COMPLETED" sections |
+| Search — instant results | Pass | "groceries" matches "Buy groceries for dinner" |
+| Projects view | Pass | Website Redesign card with progress bar, task count |
+| Call time change to 1:30 PM | Pass | Saved and persisted across reload |
+
+---
+
 ## Lessons Learned
 
 1. **Always check the actual webhook payload format** - VAPI's docs show `tool-calls` with `toolCallList[]`, not `function-call` with `functionCall`. Don't assume payload shapes from other providers (OpenAI).
@@ -243,3 +278,5 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 8. **Always use user timezone for date calculations** - Edge functions run in UTC. Any date-sensitive logic (habits, "today", day-of-week) must use the user's stored timezone. A 9 PM Mountain Time call is 3 AM UTC the next day — without timezone-aware dates, the AI sees wrong habits and wrong date.
 
 9. **Platform-aware UI hints** - Keyboard shortcut hints should detect the platform. Hardcoding "Ctrl" breaks Mac UX where users expect "⌘".
+
+10. **Deploy the trigger, not just the function** - Building a scheduler edge function is only half the job. Without a CRON trigger (Vercel cron, pg_cron, or external), the function sits idle and users never get called. Always verify the full invocation chain end-to-end.
