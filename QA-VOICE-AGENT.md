@@ -123,6 +123,54 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 
 ---
 
+## QA Round 2 — Additional Bugs Found & Fixed
+
+### 8. "Call Me Now" Silently Blocked by Duplicate Check (Medium)
+
+**Symptom:** Clicking "Call Me Now" appeared to succeed (no error) but no call was actually dispatched. Call History showed no new entry.
+
+**Root Cause:** The scheduler's duplicate-call-per-day check (`not status in ('failed','no-answer')`) found an existing "scheduled" call from earlier and skipped the user. Test calls were subject to the same guards as CRON-scheduled calls.
+
+**Fix:** Wrapped the duplicate-call and monthly-limit checks in `if (!testUserId)` so test calls bypass both guards. Also added response body checking in the frontend — `triggerTestCall()` now throws an error if `scheduled: 0` comes back, which surfaces as an error toast.
+
+**Files:** `supabase/functions/ai-schedule-calls/index.ts`, `src/contexts/VoiceAgentContext.jsx`
+
+---
+
+### 9. Dead Code in Day-of-Week Detection (Minor)
+
+**Symptom:** No user-facing impact, but 22 lines of convoluted dead code cluttered `isUserDueForCall()`.
+
+**Root Cause:** An earlier attempt at day-of-week detection using nested ternaries and `parseInt` was left in place after a simpler approach was added below it. The variable `dayOfWeek` was computed but never used — only `userDayOfWeek` was referenced.
+
+**Fix:** Removed the dead code block (lines 220-241).
+
+**File:** `supabase/functions/ai-schedule-calls/index.ts`
+
+---
+
+## QA Round 2 — Additional Features Verified
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Projects — create | Pass | Name, description, context, color picker |
+| Projects — add/complete task | Pass | Inline add, progress bar updates |
+| Tasks — By Project grouping | Pass | Groups under project name |
+| Tasks — Completed filter | Pass | Strikethrough, green checkmarks, project tags |
+| Search | Pass | Instant results matching task names |
+| Notification bell | Pass | Shows due-today + completed notifications |
+| "+ New" sidebar button | Pass | Opens full New Task modal |
+| Context filter dropdown | Pass | Opens, shows All Contexts |
+| Today — date navigation | Pass | Previous/next day arrows, "Today" link back |
+| Today — past day view | Pass | Shows correct habits/tasks for that date |
+| Habits view — progress chart | Pass | 7-day chart, streak counters |
+| Settings — frequency change | Pass | Switches between daily/weekdays/custom, persists across reload |
+| Settings — custom day picker | Pass | Day pills toggle on/off correctly |
+| Call Me Now (after fix) | Pass | New call created and dispatched to VAPI |
+| Call History — new entry | Pass | Shows the newly dispatched call |
+
+---
+
 ## Lessons Learned
 
 1. **Always check the actual webhook payload format** - VAPI's docs show `tool-calls` with `toolCallList[]`, not `function-call` with `functionCall`. Don't assume payload shapes from other providers (OpenAI).
@@ -134,3 +182,7 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 4. **DRY from the start** - The system prompt, tool definitions, and assistant config were duplicated across 3 files. Creating a shared module early prevents drift and makes fixes propagate automatically.
 
 5. **Test with real data** - The tool calls only fail when there's actual user data to query. Empty-state testing misses these bugs entirely.
+
+6. **Test calls need different guards than CRON calls** - "Call Me Now" is a user-initiated action that should always work. Duplicate-per-day and monthly-limit checks are for automated scheduling only. Mixing the two code paths without branching causes test calls to silently fail.
+
+7. **Check response bodies, not just status codes** - A 200 OK with `{ scheduled: 0 }` is functionally a failure for the user. Always inspect the payload when the semantics matter.
