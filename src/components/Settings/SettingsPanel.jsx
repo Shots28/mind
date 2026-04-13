@@ -7,6 +7,7 @@ import Modal from '../Common/Modal';
 import GoogleCalendarSettings from './GoogleCalendarSettings';
 import { useToast } from '../Common/Toast';
 import ConfirmDialog from '../Common/ConfirmDialog';
+import VoiceAgentSettings from './VoiceAgentSettings';
 import { LogOut, Plus, Trash2, Edit3, Check, X, Globe, Lock } from 'lucide-react';
 import './SettingsPanel.css';
 
@@ -350,6 +351,10 @@ export default function SettingsPanel({ isOpen, onClose }) {
                 <div className="settings-divider" />
 
                 <GoogleCalendarSettings />
+
+                <div className="settings-divider" />
+
+                <VoiceAgentSettings />
 
                 <div className="settings-divider" />
 

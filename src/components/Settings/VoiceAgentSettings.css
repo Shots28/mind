@@ -1,0 +1,206 @@
+.va-settings {
+  display: flex;
+  flex-direction: column;
+}
+
+.va-setup-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+  padding: 12px 20px;
+}
+
+.va-settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.va-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.va-setting-row.va-setting-column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.va-setting-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.va-verified-badge {
+  font-size: 12px;
+  color: var(--success-color);
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.va-time-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* Toggle switch */
+.va-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.va-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.va-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  transition: all 0.2s;
+}
+
+.va-toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  bottom: 3px;
+  left: 3px;
+  transition: transform 0.2s;
+}
+
+.va-toggle input:checked + .va-toggle-slider {
+  background: var(--accent-color);
+}
+
+.va-toggle input:checked + .va-toggle-slider::before {
+  transform: translateX(18px);
+}
+
+/* Frequency pills */
+.va-freq-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.va-pill {
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.va-pill:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.va-pill.selected {
+  border-color: var(--accent-color);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+/* Day pills */
+.va-day-pills {
+  display: flex;
+  gap: 4px;
+}
+
+.va-day-pill {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.va-day-pill:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.va-day-pill.selected {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: white;
+}
+
+/* Voice select */
+.va-voice-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  max-width: 180px;
+}
+
+/* Action buttons */
+.va-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.va-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.va-action-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent-color);
+}
+
+.va-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

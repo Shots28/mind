@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Phone } from 'lucide-react';
 import { useToast } from '../Common/Toast';
 import { useJournal } from '../../contexts/JournalContext';
 import ConfirmDialog from '../Common/ConfirmDialog';
@@ -25,6 +25,7 @@ export default function JournalEntryCard({ entry, onDelete }) {
     <div className="journal-history-entry glass-panel">
       <div className="journal-entry-header">
         <span className="journal-entry-time">
+          {entry.source === 'voice_agent' && <Phone size={12} className="journal-voice-badge" />}
           {new Date(entry.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
         </span>
         {entry.contexts?.name && (

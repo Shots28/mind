@@ -7,6 +7,7 @@ import { ProjectProvider } from './ProjectContext';
 import { EventProvider } from './EventContext';
 import { HabitProvider } from './HabitContext';
 import { GoogleSyncProvider } from './GoogleSyncContext';
+import { VoiceAgentProvider } from './VoiceAgentContext';
 import { ToastProvider } from '../components/Common/Toast';
 
 export default function AppProviders({ children }) {
@@ -21,7 +22,9 @@ export default function AppProviders({ children }) {
                   <EventProvider>
                     <GoogleSyncProvider>
                       <HabitProvider>
-                        {children}
+                        <VoiceAgentProvider>
+                          {children}
+                        </VoiceAgentProvider>
                       </HabitProvider>
                     </GoogleSyncProvider>
                   </EventProvider>
