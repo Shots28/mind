@@ -15,22 +15,22 @@ export default function EventForm({ initialData, date, onSubmit, onCancel, isRea
   const [allDay, setAllDay] = useState(initialData?.all_day ?? true);
   const [startDate, setStartDate] = useState(
     initialData?.start_date
-      ? (initialData.all_day ? initialData.start_date.substring(0, 10) : initialData.start_date.substring(0, 10))
+      ? (initialData.all_day ? initialData.start_date.substring(0, 10) : toLocalDateString(new Date(initialData.start_date)))
       : (date || toLocalDateString())
   );
   const [startTime, setStartTime] = useState(
     initialData?.start_date && !initialData.all_day
-      ? initialData.start_date.substring(11, 16)
+      ? new Date(initialData.start_date).toTimeString().substring(0, 5)
       : '09:00'
   );
   const [endDate, setEndDate] = useState(
     initialData?.end_date
-      ? (initialData.all_day ? initialData.end_date.substring(0, 10) : initialData.end_date.substring(0, 10))
+      ? (initialData.all_day ? initialData.end_date.substring(0, 10) : toLocalDateString(new Date(initialData.end_date)))
       : (date || toLocalDateString())
   );
   const [endTime, setEndTime] = useState(
     initialData?.end_date && !initialData.all_day
-      ? initialData.end_date.substring(11, 16)
+      ? new Date(initialData.end_date).toTimeString().substring(0, 5)
       : '10:00'
   );
   const [description, setDescription] = useState(initialData?.description || '');
