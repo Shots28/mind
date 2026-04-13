@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useVoiceAgent } from '../../contexts/VoiceAgentContext';
 import { useToast } from '../Common/Toast';
+import { getUserTimezone } from '../../lib/dates';
 import { ArrowRight, ArrowLeft, Phone, Volume2, Check } from 'lucide-react';
 import './VoiceAgentOnboarding.css';
 
@@ -67,7 +68,7 @@ export default function VoiceAgentOnboarding({ onComplete }) {
         preferred_call_time: callTime,
         call_frequency: frequency,
         call_days: frequency === 'custom' ? customDays : null,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: getUserTimezone(),
         is_active: true,
         onboarding_completed: true,
       });
