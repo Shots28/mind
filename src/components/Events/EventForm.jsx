@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { toLocalDateString } from '../../lib/dates';
 import { useContexts } from '../../contexts/ContextContext';
 import { useGoogleSync } from '../../contexts/GoogleSyncContext';
 import { Calendar, Clock, MapPin, AlignLeft, Repeat, Cloud, Lock } from 'lucide-react';
@@ -15,7 +16,7 @@ export default function EventForm({ initialData, date, onSubmit, onCancel, isRea
   const [startDate, setStartDate] = useState(
     initialData?.start_date
       ? (initialData.all_day ? initialData.start_date.substring(0, 10) : initialData.start_date.substring(0, 10))
-      : (date || new Date().toISOString().substring(0, 10))
+      : (date || toLocalDateString())
   );
   const [startTime, setStartTime] = useState(
     initialData?.start_date && !initialData.all_day
@@ -25,7 +26,7 @@ export default function EventForm({ initialData, date, onSubmit, onCancel, isRea
   const [endDate, setEndDate] = useState(
     initialData?.end_date
       ? (initialData.all_day ? initialData.end_date.substring(0, 10) : initialData.end_date.substring(0, 10))
-      : (date || new Date().toISOString().substring(0, 10))
+      : (date || toLocalDateString())
   );
   const [endTime, setEndTime] = useState(
     initialData?.end_date && !initialData.all_day
