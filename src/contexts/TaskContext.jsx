@@ -156,10 +156,11 @@ export function TaskProvider({ children }) {
 
   const todayProgress = useMemo(() => {
     const today = toLocalDateString();
-    const todayCompleted = state.tasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(today)).length;
-    const todayMustDo = state.tasks.filter(t => t.category === 'must_do' && !t.is_completed).length;
-    const total = todayMustDo || 1;
-    return { completed: todayCompleted, total: todayMustDo, percent: Math.min(100, Math.round((todayCompleted / total) * 100)) };
+    const mustDo = state.tasks.filter(t => t.category === 'must_do');
+    const todayCompleted = mustDo.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(today)).length;
+    const totalMustDo = mustDo.length;
+    const denom = totalMustDo || 1;
+    return { completed: todayCompleted, total: totalMustDo, percent: Math.min(100, Math.round((todayCompleted / denom) * 100)) };
   }, [state.tasks]);
 
   const getTasksByCategory = useCallback((categoryId) => {

@@ -70,11 +70,12 @@ export default function TodayView() {
 
   const progress = useMemo(() => {
     const relevantTasks = activeContext === 'all' ? tasks : tasks.filter(t => t.context_id === activeContext);
-    const dateCompleted = relevantTasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(selectedDate)).length;
     const firstCatId = categories[0]?.id || 'must_do';
-    const primaryCount = relevantTasks.filter(t => t.category === firstCatId).length;
+    const primaryTasks = relevantTasks.filter(t => t.category === firstCatId);
+    const dateCompleted = primaryTasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(selectedDate)).length;
+    const primaryCount = primaryTasks.length;
     const total = primaryCount || 1;
-    return { completed: dateCompleted, total: primaryCount, percent: Math.round((dateCompleted / total) * 100) };
+    return { completed: dateCompleted, total: primaryCount, percent: Math.min(100, Math.round((dateCompleted / total) * 100)) };
   }, [tasks, activeContext, selectedDate, categories]);
 
   const hasHabitsForDate = useMemo(() => {
