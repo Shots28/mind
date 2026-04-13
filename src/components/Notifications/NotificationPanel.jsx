@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
-import { toLocalDateString } from '../../lib/dates';
+import { toLocalDateString, isSameLocalDay } from '../../lib/dates';
 import { Bell, AlertTriangle, Clock, CheckCircle, X } from 'lucide-react';
 import './Notifications.css';
 
@@ -29,7 +29,7 @@ export default function NotificationPanel({ isOpen, onClose }) {
     [tasks, today]
   );
   const recentlyCompleted = useMemo(() =>
-    tasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(today)),
+    tasks.filter(t => t.is_completed && isSameLocalDay(t.completed_at, today)),
     [tasks, today]
   );
 

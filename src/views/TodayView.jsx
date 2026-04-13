@@ -15,7 +15,7 @@ import EventsWidget from '../components/Events/EventsWidget';
 import JournalWidget from '../components/Journal/JournalWidget';
 import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
-import { toLocalDateString } from '../lib/dates';
+import { toLocalDateString, isSameLocalDay } from '../lib/dates';
 import './Views.css';
 
 export default function TodayView() {
@@ -72,7 +72,7 @@ export default function TodayView() {
     const relevantTasks = activeContext === 'all' ? tasks : tasks.filter(t => t.context_id === activeContext);
     const firstCatId = categories[0]?.id || 'must_do';
     const primaryTasks = relevantTasks.filter(t => t.category === firstCatId);
-    const dateCompleted = primaryTasks.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(selectedDate)).length;
+    const dateCompleted = primaryTasks.filter(t => t.is_completed && isSameLocalDay(t.completed_at, selectedDate)).length;
     const primaryCount = primaryTasks.length;
     const total = primaryCount || 1;
     return { completed: dateCompleted, total: primaryCount, percent: Math.min(100, Math.round((dateCompleted / total) * 100)) };

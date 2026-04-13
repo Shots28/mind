@@ -19,6 +19,15 @@ export function toLocalDateString(date = new Date()) {
 }
 
 /**
+ * True if the given ISO timestamp falls on the user's local `dateStr` (YYYY-MM-DD).
+ * Use this instead of `iso.startsWith(dateStr)` — that compares UTC to local.
+ */
+export function isSameLocalDay(iso, dateStr) {
+  if (!iso) return false;
+  return toLocalDateString(new Date(iso)) === dateStr;
+}
+
+/**
  * Returns the user's current timezone string.
  */
 export function getUserTimezone() {

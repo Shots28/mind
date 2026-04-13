@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useReducer, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { toLocalDateString } from '../lib/dates';
+import { toLocalDateString, isSameLocalDay } from '../lib/dates';
 import { useAuth } from './AuthContext';
 
 const TaskContext = createContext({});
@@ -157,7 +157,7 @@ export function TaskProvider({ children }) {
   const todayProgress = useMemo(() => {
     const today = toLocalDateString();
     const mustDo = state.tasks.filter(t => t.category === 'must_do');
-    const todayCompleted = mustDo.filter(t => t.is_completed && t.completed_at && t.completed_at.startsWith(today)).length;
+    const todayCompleted = mustDo.filter(t => t.is_completed && isSameLocalDay(t.completed_at, today)).length;
     const totalMustDo = mustDo.length;
     const denom = totalMustDo || 1;
     return { completed: todayCompleted, total: totalMustDo, percent: Math.min(100, Math.round((todayCompleted / denom) * 100)) };
