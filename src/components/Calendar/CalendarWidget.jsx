@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Calendar as CalIcon } from 'lucide-react';
 import useCalendar from '../../hooks/useCalendar';
 import { useEvents } from '../../contexts/EventContext';
 import { useTasks } from '../../contexts/TaskContext';
+import { isSameLocalDay } from '../../lib/dates';
 import './Calendar.css';
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -13,7 +14,9 @@ const CalendarWidget = ({ selectedDate, onSelectDate }) => {
     const { tasks } = useTasks();
 
     const hasItemsOnDay = (dateString) => {
-        const hasEvent = events.some(e => e.start_date && e.start_date.startsWith(dateString));
+        const hasEvent = events.some(e => e.start_date && (e.all_day
+            ? e.start_date.startsWith(dateString)
+            : isSameLocalDay(e.start_date, dateString)));
         const hasTask = tasks.some(t => t.due_date === dateString);
         return hasEvent || hasTask;
     };

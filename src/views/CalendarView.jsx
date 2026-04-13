@@ -9,7 +9,7 @@ import EmptyState from '../components/Common/EmptyState';
 import TaskForm from '../components/Tasks/TaskForm';
 import EventForm from '../components/Events/EventForm';
 import InlineDatePicker from '../components/Tasks/InlineDatePicker';
-import { toLocalDateString } from '../lib/dates';
+import { toLocalDateString, isSameLocalDay } from '../lib/dates';
 import { isGoogleEvent, formatTimeRange } from '../lib/googleSync';
 import RecurrenceActionDialog from '../components/Events/RecurrenceActionDialog';
 import ConfirmDialog from '../components/Common/ConfirmDialog';
@@ -159,7 +159,9 @@ export default function CalendarView() {
 
   const getEventsForDay = useCallback((dateString) => {
     return filteredEvents
-      .filter(e => e.start_date && e.start_date.startsWith(dateString))
+      .filter(e => e.all_day
+        ? (e.start_date && e.start_date.startsWith(dateString))
+        : isSameLocalDay(e.start_date, dateString))
       .sort((a, b) => {
         if (a.all_day && !b.all_day) return -1;
         if (!a.all_day && b.all_day) return 1;

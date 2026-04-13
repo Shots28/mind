@@ -3,6 +3,7 @@ import { Calendar, Plus, Trash2, Cloud, Lock, ChevronDown, ChevronUp, Repeat } f
 import { useEvents } from '../../contexts/EventContext';
 import { useContexts } from '../../contexts/ContextContext';
 import { isGoogleEvent, formatTimeRange, getSyncStatusColor } from '../../lib/googleSync';
+import { isSameLocalDay } from '../../lib/dates';
 import { useToast } from '../Common/Toast';
 import ConfirmDialog from '../Common/ConfirmDialog';
 import './EventsWidget.css';
@@ -21,7 +22,9 @@ export default function EventsWidget({ date }) {
   const dateEvents = useMemo(() => {
     if (!date) return [];
     const expanded = getExpandedEvents(date, date);
-    let filtered = expanded.filter(e => e.start_date && e.start_date.startsWith(date));
+    let filtered = expanded.filter(e => e.all_day
+      ? (e.start_date && e.start_date.startsWith(date))
+      : isSameLocalDay(e.start_date, date));
     if (activeContext !== 'all') filtered = filtered.filter(e => e.context_id === activeContext);
     // Sort: all-day first, then by start time
     return filtered.sort((a, b) => {
