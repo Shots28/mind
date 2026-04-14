@@ -31,13 +31,26 @@ function googleEventToLocal(
 ) {
   const isAllDay = !!gEvent.start?.date;
 
+  // Google encodes all-day end dates as exclusive (4/13 single-day event =>
+  // end.date '4/14'). Locally-created events store end_date inclusively, and
+  // google-sync-push unconditionally adds one day to convert to exclusive on
+  // push. Normalize here so the DB column has a single meaning; otherwise
+  // editing a Google-sourced event would push end+2 days and visibly extend
+  // the event on every save.
+  let normalizedEndAllDay: string | null = null;
+  if (isAllDay && gEvent.end?.date) {
+    const d = new Date(gEvent.end.date + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() - 1);
+    normalizedEndAllDay = d.toISOString().substring(0, 10);
+  }
+
   return {
     user_id: userId,
     title: gEvent.summary || "(No title)",
     description: gEvent.description || null,
     location: gEvent.location || null,
     start_date: isAllDay ? gEvent.start!.date! : gEvent.start?.dateTime || null,
-    end_date: isAllDay ? gEvent.end?.date || null : gEvent.end?.dateTime || null,
+    end_date: isAllDay ? normalizedEndAllDay : gEvent.end?.dateTime || null,
     all_day: isAllDay,
     recurrence_rule: gEvent.recurrence?.[0] || null,
     recurring_event_id: null, // Resolved in a second pass

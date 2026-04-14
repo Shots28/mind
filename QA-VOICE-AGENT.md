@@ -532,3 +532,23 @@ This matters for three reasons: (1) TCPA/CTIA — you can't place automated call
 24. **Nested try/catch is how you keep a row's state model consistent.** When a single operation writes a row then calls an external API that might fail, the outer try/catch sees the exception *after* the row is already inserted — so a plain "log and continue" leaves the DB with a lie (row says `scheduled`, reality says `never dispatched`). Wrap the external call in its own inner try/catch whose sole job is "if I throw, flip the row to the terminal-error state." The outer try/catch then only catches pre-insert failures, which are naturally idempotent.
 
 25. **"Skip for now" comments in security-relevant code paths are technical debt with interest.** A `phone_verified: true, // skip verification for now` line looks harmless when the feature is new and traffic is internal. Left in place, it quietly becomes a TCPA compliance problem, a toll-fraud vector, and a harassment weapon. When disabling a security control for a reason, prefer a feature flag with a dated TODO (`// TODO(2026-04-13): wire up Twilio verify before public launch — skipping because …`) so the debt surfaces in reviews and can be graded against the launch date, not forgotten in a code comment.
+
+---
+
+## QA Round 10 — 2026-04-13 (Google all-day end-date pull/push asymmetry)
+
+### 26. Editing a Google-Sourced All-Day Event Extends It by One Day on Every Save (High)
+
+**Symptom:** User pulls an all-day event from Google Calendar (say "Conference — April 13"). They rename it in Zenith. The event is now "Conference — April 13-14". They rename it again; now it's "Conference — April 13-15". Each save silently extends the event by one day in Google Calendar.
+
+**Root Cause:** Same column, two semantics. Google encodes all-day end dates as **exclusive** — a single-day event on 4/13 has `end.date = '4/14'`. The pull handler stored Google's end.date verbatim. Locally-created all-day events in `EventForm` store the end date inclusively (user's picked "ends on" date). `google-sync-push` unconditionally runs `setUTCDate(+1)` to convert inclusive→exclusive on push. That conversion is correct for local-origin events and catastrophic for Google-origin events: pull gives '4/14' (exclusive from Google), the user edits the title, push adds +1 and sends '4/15', Google stores that as exclusive so the event visibly covers 4/13–4/14. Next pull re-reads '4/15' from Google, next edit adds another day, etc.
+
+**Fix:** Normalize at pull time in `google-sync-pull/index.ts`. Subtract one UTC day from `gEvent.end.date` before storing, so the DB column has a single semantics (inclusive) regardless of origin. Push's existing +1 conversion then works uniformly.
+
+**File:** `supabase/functions/google-sync-pull/index.ts`
+
+---
+
+## QA Round 10 — Lessons Learned
+
+26. **A database column with two meanings is a bug waiting for a third edit.** `end_date` worked fine for months because each code path only ever saw events from one origin — the form only created local events, the push mostly saw fresh local events, the pull wrote Google events straight through. The bug only surfaces on the edit-after-pull path, which is exactly the path that's hardest to exercise in tests. Normalize semantics at the trust boundary (the pull), not at every read site, so the internal invariant is "column X always means Y" rather than "column X means Y *if* source=Z."
