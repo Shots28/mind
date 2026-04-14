@@ -130,45 +130,56 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Build assistant config from shared module
-      const { data: prefs } = await admin
-        .from("call_preferences")
-        .select("voice_id")
-        .eq("user_id", user.user_id)
-        .single();
+      // Anything that throws after the call record is inserted must flip the
+      // row to "failed" — otherwise it sits in "scheduled" forever: the
+      // retry-calls cron only picks up no-answer/failed, and today's
+      // dup-guard skips any non-(failed|no-answer) existing call, so the
+      // user silently loses today's check-in.
+      try {
+        const { data: prefs } = await admin
+          .from("call_preferences")
+          .select("voice_id")
+          .eq("user_id", user.user_id)
+          .single();
 
-      const webhookUrl = `${supabaseUrl}/functions/v1/ai-vapi-webhook`;
-      const assistantConfig = await buildAssistantConfig(
-        user.user_id,
-        call.id,
-        webhookUrl,
-        prefs?.voice_id
-      );
+        const webhookUrl = `${supabaseUrl}/functions/v1/ai-vapi-webhook`;
+        const assistantConfig = await buildAssistantConfig(
+          user.user_id,
+          call.id,
+          webhookUrl,
+          prefs?.voice_id
+        );
 
-      // Dispatch VAPI outbound call
-      const vapiResp = await fetch(VAPI_API_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${vapiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phoneNumberId: vapiPhoneNumberId,
-          customer: { number: user.phone_number },
-          assistant: assistantConfig,
-        }),
-      });
+        const vapiResp = await fetch(VAPI_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${vapiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phoneNumberId: vapiPhoneNumberId,
+            customer: { number: user.phone_number },
+            assistant: assistantConfig,
+          }),
+        });
 
-      if (vapiResp.ok) {
-        const vapiData = await vapiResp.json();
-        await admin
-          .from("calls")
-          .update({ vapi_call_id: vapiData.id })
-          .eq("id", call.id);
-        scheduled++;
-      } else {
-        const errText = await vapiResp.text();
-        console.error("VAPI call failed:", errText);
+        if (vapiResp.ok) {
+          const vapiData = await vapiResp.json();
+          await admin
+            .from("calls")
+            .update({ vapi_call_id: vapiData.id })
+            .eq("id", call.id);
+          scheduled++;
+        } else {
+          const errText = await vapiResp.text();
+          console.error("VAPI call failed:", errText);
+          await admin
+            .from("calls")
+            .update({ status: "failed" })
+            .eq("id", call.id);
+        }
+      } catch (dispatchErr) {
+        console.error(`Dispatch error for call ${call.id}:`, dispatchErr);
         await admin
           .from("calls")
           .update({ status: "failed" })

@@ -480,3 +480,55 @@ Also: the edge function had no server-side auth check, relying entirely on Supab
 21. **When two writes from the same request have to agree, write them together.** The Twilio verify flow had two facts that had to match — the number the user typed and the verified flag — but only one of them rode in on the successful request. The other was assumed from earlier state. Any code path that has "look up what the user said last time they called us" between two writes is a race waiting to happen; put the identifying field in the same update as the flag.
 
 22. **Service-role edge functions deserve defense-in-depth auth checks.** Supabase's gateway requires a JWT by default, so "it's protected by the gateway" is usually true — but that protection is one config flag away from being disabled (e.g. adding `verify_jwt = false` to make a webhook reachable). For any edge function that iterates over cross-user data or calls external APIs on the user's behalf, add an explicit `authHeader.includes(SERVICE_ROLE_KEY)` inside the function so gateway misconfig can't silently open the door.
+
+---
+
+## QA Round 9 — 2026-04-13 (End-to-end VAPI call path)
+
+Focused audit of the full call lifecycle: onboarding → verify → schedule → dispatch → VAPI webhook → tool-calls → end-of-call-report → retry. Found three distinct breakage modes, all shipped.
+
+### 23. VAPI Webhook Secret Was Optional — Anyone Can Invoke Agent Actions (Critical)
+
+**Symptom:** If `VAPI_WEBHOOK_SECRET` is unset in the edge-function environment (or a developer forgets to configure it), the webhook accepts any POST without authentication. Every webhook event carries `userId` in payload metadata that drives DB mutations — `mark_habit_done`, `complete_task`, `create_task`, `create_journal_entry`, call status/transcript writes. Mutations run under the service role, bypassing RLS. So any internet caller can impersonate VAPI and operate on arbitrary users' data.
+
+**Root Cause:** `if (webhookSecret) { check }` — the secret check was gated on the secret itself being defined. Silent skip on misconfiguration is the worst possible failure mode for an auth check.
+
+**Fix:** Hard-require the secret. If it's not set, the webhook returns 500 "Server misconfigured" and logs the issue. VAPI will see the 500 and alert / retry, which surfaces the misconfiguration loudly instead of silently opening the door.
+
+**File:** `supabase/functions/ai-vapi-webhook/index.ts`
+
+---
+
+### 24. Dispatch Exception Leaves Call Stuck in "scheduled" Forever (High)
+
+**Symptom:** If `buildAssistantConfig` or `fetch(VAPI)` threw (transient network error, Deno runtime hiccup, assistant-builder DB query failing on a weird edge case), the user silently lost today's check-in AND was ineligible for retry until the next local day. The symptom the user reported originally ("doesn't call me on time") is one of the ways this manifested: the outer `catch` swallowed the error and moved on, leaving a `status='scheduled'` row in the DB that (a) wasn't picked up by `ai-retry-calls` (filters on no-answer/failed only), and (b) made `ai-schedule-calls` skip the user on subsequent 5-min runs (dup-guard treats any non-(failed|no-answer) row as "already scheduled today").
+
+**Root Cause:** A single outer try/catch wrapped both the DB insert and the dispatch. Anything that threw between the insert and the `if (vapiResp.ok)` branch never updated the row. The outer catch just logged.
+
+**Fix:** Nested try/catch around everything after the call-record insert in both `ai-schedule-calls` and `ai-retry-calls`. Any dispatch exception flips the row to `status='failed'`, which makes retry-calls cron pick it up within 15 minutes.
+
+**Files:** `supabase/functions/ai-schedule-calls/index.ts`, `supabase/functions/ai-retry-calls/index.ts`
+
+---
+
+### 25. Onboarding Marked Every Phone as Verified Without Twilio Check (Critical)
+
+**Symptom:** The onboarding wizard had five steps (intro → phone → voice → schedule → done) with no verification step. `handleFinish` wrote `phone_verified: true` unconditionally. Any user could enter any 10-digit number — their own, a friend's, a stranger's, an emergency line — and the system would immediately start dialing it on the preferred-call schedule. No proof of phone ownership, no consent from the number's owner.
+
+This matters for three reasons: (1) TCPA/CTIA — you can't place automated calls to a number you haven't obtained consent from, and Zenith had no mechanism to demonstrate consent; (2) Twilio toll fraud / abuse reports — a malicious actor could weaponize Zenith to harass a target with daily AI calls; (3) the feature-flagged verification infra already existed (`ai-verify-phone` function, `sendVerificationCode` / `verifyPhone` in `VoiceAgentContext`) but was orphaned — the onboarding flow literally ignored it with a comment `// skip verification for now`.
+
+**Root Cause:** The onboarding was shipped before Twilio Verify integration landed, and the "skip for now" shortcut was never revisited.
+
+**Fix:** Inserted a 6th step between phone entry and voice selection: the phone-entry CTA now sends the Twilio code via `sendVerificationCode` and advances to a code-entry step; the code-entry step calls `verifyPhone` and only advances on Twilio approval. `handleFinish` no longer writes `phone_number` or `phone_verified` — those are owned by the verify step, so a stale `phoneNumber` state value can't overwrite the verified pair. Also added a "Resend code" link and a "Use a different number" link that resets verification state and returns to the phone-entry step.
+
+**File:** `src/components/VoiceAgent/VoiceAgentOnboarding.jsx`
+
+---
+
+## QA Round 9 — Lessons Learned
+
+23. **Auth checks that skip silently on misconfiguration are worse than no auth check.** `if (secret) { verify }` means the protection goes away the moment someone forgets to set the env var in a new environment — and there's no noisy failure to catch the misconfiguration. Prefer `if (!secret) return 500` so absent-secret fails closed, not open. This is the same principle as "fail closed, not open" in firewalls and payment gateways.
+
+24. **Nested try/catch is how you keep a row's state model consistent.** When a single operation writes a row then calls an external API that might fail, the outer try/catch sees the exception *after* the row is already inserted — so a plain "log and continue" leaves the DB with a lie (row says `scheduled`, reality says `never dispatched`). Wrap the external call in its own inner try/catch whose sole job is "if I throw, flip the row to the terminal-error state." The outer try/catch then only catches pre-insert failures, which are naturally idempotent.
+
+25. **"Skip for now" comments in security-relevant code paths are technical debt with interest.** A `phone_verified: true, // skip verification for now` line looks harmless when the feature is new and traffic is internal. Left in place, it quietly becomes a TCPA compliance problem, a toll-fraud vector, and a harassment weapon. When disabling a security control for a reason, prefer a feature flag with a dated TODO (`// TODO(2026-04-13): wire up Twilio verify before public launch — skipping because …`) so the debt surfaces in reviews and can be graded against the launch date, not forgotten in a code comment.

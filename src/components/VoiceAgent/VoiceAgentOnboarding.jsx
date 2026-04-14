@@ -22,11 +22,12 @@ const FREQUENCIES = [
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function VoiceAgentOnboarding({ onComplete }) {
-  const { updatePreferences } = useVoiceAgent();
+  const { updatePreferences, sendVerificationCode, verifyPhone } = useVoiceAgent();
   const { showToast } = useToast();
 
   const [step, setStep] = useState(0);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [selectedVoice, setSelectedVoice] = useState(VOICES[0].id);
   const [callTime, setCallTime] = useState('21:00');
   const [frequency, setFrequency] = useState('daily');
@@ -34,7 +35,7 @@ export default function VoiceAgentOnboarding({ onComplete }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const totalSteps = 5;
+  const totalSteps = 6;
 
   const formatPhoneForDisplay = (value) => {
     const digits = value.replace(/\D/g, '');
@@ -48,22 +49,61 @@ export default function VoiceAgentOnboarding({ onComplete }) {
     return `+1${digits}`;
   };
 
-  const handlePhoneSubmit = () => {
+  const handlePhoneSubmit = async () => {
     const digits = phoneNumber.replace(/\D/g, '');
     if (digits.length !== 10) {
       setError('Please enter a valid 10-digit US phone number');
       return;
     }
     setError('');
-    setStep(2);
+    setLoading(true);
+    try {
+      await sendVerificationCode(getE164());
+      setStep(2);
+    } catch (err) {
+      setError(err.message || 'Failed to send verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (verificationCode.length !== 6) {
+      setError('Enter the 6-digit code we just texted you');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await verifyPhone(getE164(), verificationCode);
+      setStep(3);
+    } catch (err) {
+      setError(err.message || 'Invalid code — try again');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await sendVerificationCode(getE164());
+      showToast('New code sent');
+    } catch (err) {
+      setError(err.message || 'Failed to resend code');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFinish = async () => {
     setLoading(true);
     try {
+      // phone_number and phone_verified were already written by the verify step.
+      // Don't re-send them here — a stale phoneNumber state value could overwrite
+      // the verified pair.
       await updatePreferences({
-        phone_number: getE164(),
-        phone_verified: true, // skip verification for now
         voice_id: selectedVoice,
         preferred_call_time: callTime,
         call_frequency: frequency,
@@ -128,7 +168,7 @@ export default function VoiceAgentOnboarding({ onComplete }) {
               onClick={handlePhoneSubmit}
               disabled={phoneNumber.replace(/\D/g, '').length !== 10 || loading}
             >
-              Continue <ArrowRight size={16} />
+              {loading ? 'Sending code…' : 'Send code'} <ArrowRight size={16} />
             </button>
             <button className="va-back" onClick={() => setStep(0)}>
               <ArrowLeft size={14} /> Back
@@ -137,6 +177,39 @@ export default function VoiceAgentOnboarding({ onComplete }) {
         )}
 
         {step === 2 && (
+          <div className="va-step">
+            <h2 className="va-step-title">Enter the 6-digit code</h2>
+            <p className="va-step-desc">
+              We texted a code to +1 {formatPhoneForDisplay(phoneNumber)}. Enter it to confirm this is your phone.
+            </p>
+            {error && <p className="va-error">{error}</p>}
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="input-field va-code-input"
+              placeholder="123456"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              autoFocus
+            />
+            <button
+              className="btn-primary va-cta"
+              onClick={handleVerifyCode}
+              disabled={verificationCode.length !== 6 || loading}
+            >
+              {loading ? 'Verifying…' : 'Verify'} <ArrowRight size={16} />
+            </button>
+            <button className="va-back" onClick={handleResendCode} disabled={loading}>
+              Resend code
+            </button>
+            <button className="va-back" onClick={() => { setVerificationCode(''); setError(''); setStep(1); }}>
+              <ArrowLeft size={14} /> Use a different number
+            </button>
+          </div>
+        )}
+
+        {step === 3 && (
           <div className="va-step">
             <h2 className="va-step-title">Pick your AI voice</h2>
             <p className="va-step-desc">Choose how your check-in partner sounds.</p>
@@ -156,16 +229,16 @@ export default function VoiceAgentOnboarding({ onComplete }) {
                 </button>
               ))}
             </div>
-            <button className="btn-primary va-cta" onClick={() => setStep(3)}>
+            <button className="btn-primary va-cta" onClick={() => setStep(4)}>
               Continue <ArrowRight size={16} />
             </button>
-            <button className="va-back" onClick={() => setStep(1)}>
+            <button className="va-back" onClick={() => setStep(2)}>
               <ArrowLeft size={14} /> Back
             </button>
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="va-step">
             <h2 className="va-step-title">When should we call?</h2>
             <p className="va-step-desc">Pick a time and how often you'd like check-ins.</p>
@@ -208,16 +281,16 @@ export default function VoiceAgentOnboarding({ onComplete }) {
                 </div>
               </div>
             )}
-            <button className="btn-primary va-cta" onClick={() => setStep(4)}>
+            <button className="btn-primary va-cta" onClick={() => setStep(5)}>
               Continue <ArrowRight size={16} />
             </button>
-            <button className="va-back" onClick={() => setStep(2)}>
+            <button className="va-back" onClick={() => setStep(3)}>
               <ArrowLeft size={14} /> Back
             </button>
           </div>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <div className="va-step">
             <div className="va-icon-circle va-success">
               <Check size={28} />
@@ -239,7 +312,7 @@ export default function VoiceAgentOnboarding({ onComplete }) {
             >
               {loading ? 'Activating...' : 'Activate check-ins'} <ArrowRight size={16} />
             </button>
-            <button className="va-back" onClick={() => setStep(3)}>
+            <button className="va-back" onClick={() => setStep(4)}>
               <ArrowLeft size={14} /> Back
             </button>
           </div>

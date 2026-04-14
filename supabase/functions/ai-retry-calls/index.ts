@@ -73,38 +73,47 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", call.id);
 
-      // Build assistant config from shared module
-      const webhookUrl = `${supabaseUrl}/functions/v1/ai-vapi-webhook`;
-      const assistantConfig = await buildAssistantConfig(
-        call.user_id,
-        call.id,
-        webhookUrl,
-        prefs?.voice_id
-      );
+      // If dispatch throws, flip back to "failed" so the next retry cycle
+      // (or the 2-hour cutoff) can act on it. Leaving it stuck in "scheduled"
+      // would consume this call's retry_count slot without actually dialing.
+      try {
+        const webhookUrl = `${supabaseUrl}/functions/v1/ai-vapi-webhook`;
+        const assistantConfig = await buildAssistantConfig(
+          call.user_id,
+          call.id,
+          webhookUrl,
+          prefs?.voice_id
+        );
 
-      // Re-dispatch via VAPI
-      const vapiResp = await fetch(VAPI_API_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${vapiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phoneNumberId: vapiPhoneNumberId,
-          customer: { number: prefs.phone_number },
-          assistant: assistantConfig,
-        }),
-      });
+        const vapiResp = await fetch(VAPI_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${vapiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phoneNumberId: vapiPhoneNumberId,
+            customer: { number: prefs.phone_number },
+            assistant: assistantConfig,
+          }),
+        });
 
-      if (vapiResp.ok) {
-        const vapiData = await vapiResp.json();
-        await admin
-          .from("calls")
-          .update({ vapi_call_id: vapiData.id })
-          .eq("id", call.id);
-        retried++;
-      } else {
-        console.error("VAPI retry failed:", await vapiResp.text());
+        if (vapiResp.ok) {
+          const vapiData = await vapiResp.json();
+          await admin
+            .from("calls")
+            .update({ vapi_call_id: vapiData.id })
+            .eq("id", call.id);
+          retried++;
+        } else {
+          console.error("VAPI retry failed:", await vapiResp.text());
+          await admin
+            .from("calls")
+            .update({ status: "failed" })
+            .eq("id", call.id);
+        }
+      } catch (dispatchErr) {
+        console.error(`Dispatch error for retry ${call.id}:`, dispatchErr);
         await admin
           .from("calls")
           .update({ status: "failed" })

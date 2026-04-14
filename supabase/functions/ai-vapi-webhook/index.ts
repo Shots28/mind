@@ -255,13 +255,18 @@ Deno.serve(async (req: Request) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Verify webhook secret
+  // Verify webhook secret. Required — every webhook event carries userId in
+  // metadata that drives DB mutations (tool calls, journal entries, call status).
+  // Without a shared secret, any internet caller can impersonate VAPI and call
+  // agent actions on arbitrary users.
   const webhookSecret = Deno.env.get("VAPI_WEBHOOK_SECRET");
-  if (webhookSecret) {
-    const headerSecret = req.headers.get("x-vapi-secret");
-    if (headerSecret !== webhookSecret) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+  if (!webhookSecret) {
+    console.error("VAPI_WEBHOOK_SECRET not configured — refusing webhook");
+    return new Response("Server misconfigured", { status: 500 });
+  }
+  const headerSecret = req.headers.get("x-vapi-secret");
+  if (headerSecret !== webhookSecret) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   const body = await req.json();
