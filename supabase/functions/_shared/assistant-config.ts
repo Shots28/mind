@@ -2,15 +2,19 @@ import { getSupabaseAdmin } from "./supabase-admin.ts";
 import { getUserContext } from "./agent-actions.ts";
 
 // VAPI rejects assistant-level `tools` ("assistant.property tools should not
-// exist"); tools must be nested under `model.tools`. Each tool gets a
-// per-tool `server.url` so VAPI posts tool-call events to our webhook.
-function buildToolDefinitions(serverUrl: string) {
+// exist"); tools must be nested under `model.tools`. Each tool is marked
+// `async: true` so VAPI does not pause the conversation waiting for the
+// webhook — the LLM keeps talking while the DB write happens in the
+// background. Per-tool `server.url` is omitted; the top-level `server`
+// below routes all tool-call events (and carries the shared secret).
+function buildToolDefinitions() {
   return [
     {
       type: "function",
+      async: true,
       function: {
         name: "mark_habit_done",
-        description: "Mark a specific habit as completed for today",
+        description: "Mark a specific habit as completed for today. Fire-and-forget: the LLM should acknowledge and move on without waiting for confirmation.",
         parameters: {
           type: "object",
           properties: {
@@ -19,13 +23,13 @@ function buildToolDefinitions(serverUrl: string) {
           required: ["habit_name"],
         },
       },
-      server: { url: serverUrl },
     },
     {
       type: "function",
+      async: true,
       function: {
         name: "complete_task",
-        description: "Mark an existing task as completed",
+        description: "Mark an existing task as completed. Fire-and-forget: acknowledge and move on without waiting.",
         parameters: {
           type: "object",
           properties: {
@@ -34,13 +38,13 @@ function buildToolDefinitions(serverUrl: string) {
           required: ["task_title"],
         },
       },
-      server: { url: serverUrl },
     },
     {
       type: "function",
+      async: true,
       function: {
         name: "create_task",
-        description: "Create a new task for the user",
+        description: "Create a new task for the user. Fire-and-forget: acknowledge and move on without waiting.",
         parameters: {
           type: "object",
           properties: {
@@ -51,13 +55,13 @@ function buildToolDefinitions(serverUrl: string) {
           required: ["title"],
         },
       },
-      server: { url: serverUrl },
     },
     {
       type: "function",
+      async: true,
       function: {
         name: "create_journal_entry",
-        description: "Save a journal entry from the conversation",
+        description: "Save a journal entry from the conversation. Fire-and-forget: acknowledge and move on without waiting.",
         parameters: {
           type: "object",
           properties: {
@@ -67,7 +71,6 @@ function buildToolDefinitions(serverUrl: string) {
           required: ["content"],
         },
       },
-      server: { url: serverUrl },
     },
   ];
 }
@@ -168,7 +171,11 @@ Wrap up warmly. Keep it to one sentence.
 
 ## RULES
 - Warm but concise. One sentence at a time. Never monologue.
-- Always confirm before taking any action.
+- Confirm the user's intent verbally before calling a tool (e.g., "So I'll mark
+  meditation as done, yep?"). You do NOT need to wait for a tool result before
+  continuing — tools run in the background. After calling one, flow straight
+  into the next thing naturally. Never say "let me check" or "one moment" or
+  pause for a tool.
 - Never give advice or opinions unless explicitly asked.
 - If they want to skip everything, wrap up warmly without guilt-tripping.
 - If they go off-topic, gently steer back after a moment.
@@ -200,13 +207,22 @@ export async function buildAssistantConfig(
   const context = await getUserContext(userId, prefData?.timezone);
   const systemPrompt = buildSystemPrompt(userName, context);
 
+  // Pass the webhook secret inline so VAPI includes `x-vapi-secret` on every
+  // webhook POST. Without this, our handler's secret check returns 401 on
+  // every tool call, which silently drops mark_habit_done / complete_task /
+  // etc. — exactly the "tools didn't work" symptom users reported.
+  const webhookSecret = Deno.env.get("VAPI_WEBHOOK_SECRET");
+
   return {
-    serverUrl: webhookUrl,
+    server: {
+      url: webhookUrl,
+      ...(webhookSecret ? { secret: webhookSecret } : {}),
+    },
     model: {
       provider: "openai",
       model: "gpt-4o-mini",
       messages: [{ role: "system", content: systemPrompt }],
-      tools: buildToolDefinitions(webhookUrl),
+      tools: buildToolDefinitions(),
     },
     voice: {
       provider: "11labs",

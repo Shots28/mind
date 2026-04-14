@@ -41,6 +41,28 @@ async function handleAssistantRequest(metadata: Record<string, string>) {
   );
 }
 
+// Build an optimistic acknowledgement string for an async tool call. VAPI's
+// LLM receives this as the tool result and weaves it into the next utterance.
+// Since we don't wait for the DB write, the ack must describe the *intent*
+// (recorded, saved, marked) rather than claim the write succeeded.
+function optimisticAck(
+  name: string,
+  params: Record<string, string>
+): string {
+  switch (name) {
+    case "mark_habit_done":
+      return `Recorded ${params.habit_name || "the habit"} as done.`;
+    case "complete_task":
+      return `Marked "${params.task_title || "the task"}" complete.`;
+    case "create_task":
+      return `Added task "${params.title || ""}" to the list.`;
+    case "create_journal_entry":
+      return "Saved the journal entry.";
+    default:
+      return "OK";
+  }
+}
+
 // Handle function calls from the AI during the conversation
 async function handleFunctionCall(
   functionName: string,
@@ -294,6 +316,12 @@ Deno.serve(async (req: Request) => {
         const toolCallList = body.message?.toolCallList ||
           body.message?.toolCalls ||
           [];
+
+        // Tools are registered with `async: true` in the assistant config, so
+        // VAPI does not wait on this response to continue the conversation —
+        // return an ack immediately and run the DB work under waitUntil so
+        // the edge runtime keeps the promise alive after the response flushes.
+        const pending: Array<Promise<unknown>> = [];
         const results = [];
 
         for (const toolCall of toolCallList) {
@@ -314,13 +342,25 @@ Deno.serve(async (req: Request) => {
             }
           }
 
-          console.log("Tool call:", name, "params:", JSON.stringify(parameters));
+          console.log("Tool call (async):", name, "params:", JSON.stringify(parameters));
 
-          const result = await handleFunctionCall(name, parameters, metadata);
+          pending.push(
+            handleFunctionCall(name, parameters, metadata).catch((err) => {
+              console.error(`Async tool call ${name} failed:`, err);
+            })
+          );
           results.push({
             toolCallId: toolCall.id,
-            result: result.result,
+            result: optimisticAck(name, parameters),
           });
+        }
+
+        // EdgeRuntime.waitUntil keeps background work alive after Response
+        // has been flushed to VAPI; without it, Deno may cancel the in-flight
+        // DB writes once the handler returns.
+        const rt = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+        if (rt?.waitUntil) {
+          rt.waitUntil(Promise.allSettled(pending));
         }
 
         return new Response(JSON.stringify({ results }), {

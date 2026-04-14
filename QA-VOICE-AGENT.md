@@ -681,3 +681,57 @@ Verified end-to-end: next cron run inserted `calls` row `985a6290-…` for user 
 37. **Stale doc comments are actively dangerous when the API they document has changed.** The `// Tools are defined at the assistant level (not model.tools)` comment was written the last time someone read the VAPI docs. Between then and now, VAPI moved tools under `model.tools`. The comment survived, misleading every future reader (including me, twice — I almost moved them back after my first fix). When a library's API changes, grep the codebase for comments that reference the old shape and update them too. A wrong comment is worse than no comment.
 
 38. **Manual test-mode paths hide production bugs because they exercise the happy middle, not the failure boundaries.** The frontend "test call" button (auth'd via user JWT, bypasses dup/limit checks, fakes `isUserDueForCall`) took the same `buildAssistantConfig` → VAPI POST path as cron — but the *only* code difference that mattered was which `user.phone_number` got passed. User A ran test calls. User A happened to have a phone number whose VAPI response included the tools-schema error *but VAPI still returned a 2xx and a call_id*. So user A's manual tests looked like they worked (got a vapi_call_id) but silently broke the webhook downstream. Nobody ever tried a cron-initiated call for any user. When the only way to test a production code path is to wait for a cron to fire for a user due in their timezone, that path is untested. Add a `test_mode: true` option to the real CRON entrypoint that exercises the exact same code but without touching real phones, and run it from CI.
+
+---
+
+## Round 14 — "It called me, but tools didn't work and it paused"
+
+User feedback after the Round 13 cron/VAPI fix landed: *"it actually called me so that worked. … It was unable to use any of the tools. None of the tools worked in my habits, and it didn't mark them off correctly. The same was true for tasks and journal entry: it struggled to create one. I need these to be done in the backend silently so it doesn't disrupt the conversation and pause it."*
+
+Two distinct problems — the tools silently 401'd, and even when they'll succeed they'd block the conversation. Fixed both.
+
+### 32. VAPI Webhook Secret Never Sent → Every Tool Call 401s (Critical)
+
+**Symptom:** Call connects, AI runs the check-in script, but `mark_habit_done` / `complete_task` / `create_task` / `create_journal_entry` all silently fail. No rows written, no user-visible error, AI keeps talking like nothing happened.
+
+**Root Cause:** The webhook (`ai-vapi-webhook`) gates every request on `x-vapi-secret` matching `VAPI_WEBHOOK_SECRET`, but the assistant config we sent to VAPI only set `serverUrl` — a URL with **no secret**. VAPI has no way to know what secret to stamp on outgoing webhook POSTs unless you inline it via `server.secret`. So every tool call arrived without the header, our webhook returned 401, and VAPI delivered that as "tool failed" to the LLM — which quietly continued the conversation without any indicator.
+
+The same webhook secret exists as an env var on the Supabase function *and* as an env var (we assumed) on VAPI's dashboard config for the persistent assistant. But we don't use a persistent assistant — we inline an ephemeral assistant per call via `/call/phone`'s `assistant:` payload. Dashboard-level webhook config does not apply to inline assistants. Every inline assistant must carry its own `server: { url, secret }`.
+
+**Fix:** Replaced `serverUrl: webhookUrl` with:
+```ts
+server: {
+  url: webhookUrl,
+  secret: Deno.env.get("VAPI_WEBHOOK_SECRET"),
+}
+```
+Per-tool `server.url` blocks were removed — they carry no secret and are redundant once the top-level `server` is set.
+
+**File:** `supabase/functions/_shared/assistant-config.ts`
+
+### 33. Tools Blocked the Conversation While Waiting on DB Writes (Medium → Critical UX)
+
+**Symptom (implied by user's "it paused"):** Even if the tool call succeeded, the LLM synchronously waits on the webhook's response before speaking its next line. A DB roundtrip to Supabase from Deno Edge Functions typically costs 200–600 ms; add user-name lookup + insert + VAPI's own network hops and it's easily 1 s of dead air after "got it, marking that as done."
+
+Voice UX is unforgiving here. The user's note — *"the user and I don't need to wait for the tool calls to return"* — was a request for fire-and-forget semantics.
+
+**Root Cause:** Tools were registered without `async: true`. VAPI's default behavior is synchronous tool calls: AI turn pauses, webhook is POSTed, LLM waits for the `{ results: [...] }` body, then resumes. `async: true` tells VAPI to fire the webhook and continue immediately, treating the tool result as an in-flight acknowledgement rather than a blocking step.
+
+**Fix:**
+1. Added `async: true` to every tool definition.
+2. In the webhook's `tool-calls` handler: synthesize an *optimistic* acknowledgement per tool (e.g., "Recorded meditation as done") and return that immediately to VAPI. The actual DB write is scheduled via `EdgeRuntime.waitUntil(Promise.allSettled(pending))` so Deno keeps the background promises alive after the Response is flushed — otherwise the edge runtime can kill the in-flight writes.
+3. System prompt updated: "tools run in the background… flow straight into the next thing naturally. Never say 'let me check' or 'one moment' or pause for a tool."
+
+Optimistic acks describe *intent* ("recorded X"), not confirmed state — important because if a DB write fails silently, the LLM still got an ack, so the ack must not promise something we haven't verified. Pairing this with async tools means worst case is a silent no-op, best case is instant conversation flow.
+
+**Files:** `supabase/functions/_shared/assistant-config.ts`, `supabase/functions/ai-vapi-webhook/index.ts`
+
+### Lessons
+
+39. **Ephemeral assistants don't inherit dashboard config.** When you inline an `assistant: {...}` payload to `/call/phone`, none of the VAPI dashboard settings for your persistent assistant apply: server URL, webhook secret, transcriber, voice defaults — nothing. Every field that matters must be present in the payload. Any security or behavior setting you think is "already configured on the dashboard" is in fact missing on every call you make this way.
+
+40. **A silent 401 looks identical to a bad LLM from the outside.** The failure mode here is devious: the AI would verbally acknowledge marking a habit, but nothing was written. From the user's perspective, the AI was "just agreeable," lying about actions it couldn't perform. There were no user-visible errors, no stuck rows, no failed webhook events in a dashboard — just missing DB writes that looked like the AI forgot to call the tool. Rule: when writing webhook auth, make rejected requests visible somewhere that doesn't rely on a human checking function logs. A 401 that lands in a log nobody reads is indistinguishable from working code.
+
+41. **Voice UX needs `async: true` on any tool that writes to a DB.** Conversational AI over a real phone line has ~200 ms of tolerated pause before it sounds robotic. A Supabase DB write over Edge Functions routinely exceeds that. There is no scenario in a check-in flow where the LLM *needs* the tool's actual result before the next turn — it just needs to know the user said yes. Default to async tools + optimistic acks for any "agent takes an action on the user's behalf" pattern. Use sync tools only when the next turn of the conversation depends on the tool's return value (e.g., a search query).
+
+42. **`EdgeRuntime.waitUntil` is required to outlive the Response in Deno edge functions.** The instinctive pattern — fire the DB promise, `return new Response(...)` without awaiting — is broken in edge runtimes: once the response flushes, outstanding promises *can* be cancelled by the runtime. The fix is `EdgeRuntime.waitUntil(promise)` which marks the promise as work the runtime must keep alive until it resolves. Background tasks in serverless environments always need a keep-alive primitive or they leak cancellations nondeterministically.
