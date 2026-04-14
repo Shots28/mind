@@ -436,3 +436,47 @@ endDate = end.toISOString().substring(0, 10);
 18. **"Works in production" ≠ "correct"** when the runtime's timezone happens to mask the bug. Supabase Edge Functions run in UTC, so local-time math that's equivalent to UTC math appears fine forever — until the code gets copied into a browser, a local dev run with `TZ=` set, or a differently-configured runtime. Prefer unambiguously timezone-specified math even when the ambient timezone currently makes it a no-op.
 
 19. **Keep external model IDs current.** Model SDKs bump regularly and older snapshots don't always roll forward pricing/latency improvements. A periodic grep for pinned model versions (`claude-*`, `gpt-*`) against the current system-documented latest is cheap insurance.
+
+---
+
+## QA Round 8 — 2026-04-13 (Infra + Twilio audit)
+
+### 21. Google Calendar Watches Never Renewed — Push Sync Dies After 7 Days (High)
+
+**Symptom:** Users who connect Google Calendar see external calendar changes sync into the app for the first 7 days, then silently stop receiving updates. They'd have to manually disconnect and reconnect to re-arm the watch.
+
+**Root Cause:** The `google-renew-watches` edge function exists and correctly renews watches that expire within 12 hours, stops the old watch, creates a new one, and backfills with an incremental pull. But nothing ever calls it. `vercel.json` registers crons for `ai-schedule-calls` and `ai-retry-calls` only — `google-renew-watches` is orphaned. README claims "automatic watch renewal via cron job" but the cron never existed. Google Calendar watches max out at 7 days, so push notifications go permanently dark on day 8 for every connected user.
+
+Also: the edge function had no server-side auth check, relying entirely on Supabase's gateway JWT requirement. Anyone holding the public anon key could trigger it. On a function that enumerates every synced calendar across every user, that's too close to the blast radius to leave unprotected.
+
+**Fix:**
+- Added `api/cron-renew-watches.js` (same shape as the other two cron handlers — CRON_SECRET or `vercel-cron` UA).
+- Added Vercel cron entry `0 */6 * * *` (every 6 hours — gives 2 retry windows before the 12-hour renewal threshold expires, while staying under Pro-plan cron quotas).
+- Added explicit service-role auth check inside the edge function (defense in depth): `authHeader.includes(serviceKey)` — same pattern used by `ai-schedule-calls` / `ai-retry-calls`.
+
+**Files:**
+- `api/cron-renew-watches.js` (new)
+- `vercel.json` (added cron entry)
+- `supabase/functions/google-renew-watches/index.ts` (added auth guard)
+
+---
+
+### 22. Phone Verification Can Mark the Wrong Number as Verified (Medium)
+
+**Symptom:** If a user enters phone A → receives SMS code → before entering the code, changes the input to phone B → clicks "Send code" (starting a new Twilio verification to B, which also updates `call_preferences.phone_number` to B, unverified) → goes back and enters A's code, clicking Verify. Twilio approves the code (it's valid for phone A), but the DB row now has `phone_number=B, phone_verified=true`. The wrong number is marked verified, and outbound calls dial the unverified B.
+
+**Root Cause:** The verify action submits `phone_number` to Twilio's VerificationCheck (so the code must match that specific number — Twilio-side is fine), but when writing `phone_verified: true` to `call_preferences`, the update keys only on `user_id`. It doesn't ensure the verified number is the one that gets stored.
+
+**Fix:** Include `phone_number` in the update alongside `phone_verified: true`, so the verified flag and the stored number are written atomically from the same request payload. Race between a second "send" call and the verify becomes harmless — whichever number the user ultimately proves they control is the one that lands in the DB.
+
+**File:** `supabase/functions/ai-verify-phone/index.ts`
+
+---
+
+## QA Round 8 — Lessons Learned
+
+20. **"Cron job exists" ≠ "cron job runs."** A file that looks like a scheduled task (the edge function) being present in the repo doesn't mean a scheduler actually invokes it. For any time-driven function, grep both the function directory AND the scheduler config (here `vercel.json`) and confirm both sides are wired. README claims about "automatic X" are not evidence — check the config.
+
+21. **When two writes from the same request have to agree, write them together.** The Twilio verify flow had two facts that had to match — the number the user typed and the verified flag — but only one of them rode in on the successful request. The other was assumed from earlier state. Any code path that has "look up what the user said last time they called us" between two writes is a race waiting to happen; put the identifying field in the same update as the flag.
+
+22. **Service-role edge functions deserve defense-in-depth auth checks.** Supabase's gateway requires a JWT by default, so "it's protected by the gateway" is usually true — but that protection is one config flag away from being disabled (e.g. adding `verify_jwt = false` to make a webhook reachable). For any edge function that iterates over cross-user data or calls external APIs on the user's behalf, add an explicit `authHeader.includes(SERVICE_ROLE_KEY)` inside the function so gateway misconfig can't silently open the door.

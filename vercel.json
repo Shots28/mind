@@ -10,6 +10,10 @@
     {
       "path": "/api/cron-retry-calls",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron-renew-watches",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

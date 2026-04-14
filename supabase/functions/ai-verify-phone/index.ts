@@ -115,11 +115,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Mark phone as verified
+    // Mark phone as verified. Also write phone_number here so a racing "send"
+    // to a different number between send-code and verify-code can't leave the
+    // account with a mismatched (number, verified) pair.
     const admin = getSupabaseAdmin();
     await admin
       .from("call_preferences")
-      .update({ phone_verified: true })
+      .update({ phone_number, phone_verified: true })
       .eq("user_id", auth.user.id);
 
     return new Response(
