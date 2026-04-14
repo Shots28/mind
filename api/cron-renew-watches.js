@@ -16,21 +16,27 @@ export default async function handler(req, res) {
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const cronSharedSecret = process.env.CRON_SHARED_SECRET;
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || (!serviceRoleKey && !cronSharedSecret)) {
     console.error('[cron-renew-watches] Missing env vars', {
       hasSupabaseUrl: !!supabaseUrl,
       hasServiceRoleKey: !!serviceRoleKey,
+      hasCronSharedSecret: !!cronSharedSecret,
     });
     return res.status(500).json({ error: 'Missing env vars' });
   }
+
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const gatewayToken = serviceRoleKey || anonKey;
 
   try {
     const resp = await fetch(`${supabaseUrl}/functions/v1/google-renew-watches`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
+        Authorization: `Bearer ${gatewayToken}`,
         'Content-Type': 'application/json',
+        ...(cronSharedSecret ? { 'X-Cron-Secret': cronSharedSecret } : {}),
       },
     });
 

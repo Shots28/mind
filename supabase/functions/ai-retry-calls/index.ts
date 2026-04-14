@@ -7,10 +7,16 @@ const MAX_RETRIES = 2;
 const RETRY_DELAY_MINUTES = 15;
 
 Deno.serve(async (req: Request) => {
-  // Only allow POST with service role key (from CRON)
+  // Only allow POST from CRON. Accept either the service role key or a
+  // CRON_SHARED_SECRET header — SRK can drift between Vercel and Supabase
+  // after rotations, but the shared secret is under our control on both sides.
   const authHeader = req.headers.get("Authorization");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!authHeader || !authHeader.includes(serviceKey || "")) {
+  const cronSharedSecret = Deno.env.get("CRON_SHARED_SECRET");
+  const cronHeader = req.headers.get("x-cron-secret");
+  const srkMatch = authHeader && serviceKey && authHeader.includes(serviceKey);
+  const cronMatch = cronSharedSecret && cronHeader === cronSharedSecret;
+  if (!srkMatch && !cronMatch) {
     return new Response("Unauthorized", { status: 401 });
   }
 

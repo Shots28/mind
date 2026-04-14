@@ -5,13 +5,18 @@ import { getValidAccessToken } from "../_shared/google-auth.ts";
 const GCAL_BASE = "https://www.googleapis.com/calendar/v3";
 
 Deno.serve(async (req: Request) => {
-  // Only allow POST with service role key (from CRON). Defense in depth on top
-  // of the Supabase gateway — this endpoint enumerates every synced calendar,
-  // renews Google watches, and triggers pulls; it must not be callable by
-  // anyone holding the anon key.
+  // Only allow POST from CRON. Defense in depth on top of the Supabase
+  // gateway — this endpoint enumerates every synced calendar, renews Google
+  // watches, and triggers pulls; it must not be callable by anyone holding
+  // the anon key. Accept SRK OR CRON_SHARED_SECRET (SRK can drift between
+  // Vercel and Supabase after rotations).
   const authHeader = req.headers.get("Authorization");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!authHeader || !authHeader.includes(serviceKey || "")) {
+  const cronSharedSecret = Deno.env.get("CRON_SHARED_SECRET");
+  const cronHeader = req.headers.get("x-cron-secret");
+  const srkMatch = authHeader && serviceKey && authHeader.includes(serviceKey);
+  const cronMatch = cronSharedSecret && cronHeader === cronSharedSecret;
+  if (!srkMatch && !cronMatch) {
     return new Response("Unauthorized", { status: 401 });
   }
 

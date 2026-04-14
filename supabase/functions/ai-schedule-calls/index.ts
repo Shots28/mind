@@ -41,8 +41,15 @@ Deno.serve(async (req: Request) => {
     }
     testUserId = user.id;
   } else {
-    // CRON mode: require service role key
-    if (!authHeader || !authHeader.includes(serviceKey || "")) {
+    // CRON mode: accept either the service role key (local/test) or a
+    // shared secret header from the Vercel cron handler. Using only the SRK
+    // is fragile because Supabase's auto-injected SUPABASE_SERVICE_ROLE_KEY
+    // can drift from whatever the Vercel env has set after a key rotation.
+    const cronSharedSecret = Deno.env.get("CRON_SHARED_SECRET");
+    const cronHeader = req.headers.get("x-cron-secret");
+    const srkMatch = authHeader && serviceKey && authHeader.includes(serviceKey);
+    const cronMatch = cronSharedSecret && cronHeader === cronSharedSecret;
+    if (!srkMatch && !cronMatch) {
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
   }
@@ -78,6 +85,8 @@ Deno.serve(async (req: Request) => {
   }
 
   let scheduled = 0;
+  let failed = 0;
+  const failureReasons: string[] = [];
 
   for (const user of users) {
     try {
@@ -173,6 +182,13 @@ Deno.serve(async (req: Request) => {
         } else {
           const errText = await vapiResp.text();
           console.error("VAPI call failed:", errText);
+          failed++;
+          // Surface the FIRST error to the CRON response body (no user_ids);
+          // Vercel's cron UI only shows HTTP status + body, so a silent
+          // aggregate counter makes VAPI schema regressions invisible.
+          if (failureReasons.length === 0) {
+            failureReasons.push(`vapi_${vapiResp.status}: ${errText.slice(0, 200)}`);
+          }
           await admin
             .from("calls")
             .update({ status: "failed" })
@@ -180,6 +196,10 @@ Deno.serve(async (req: Request) => {
         }
       } catch (dispatchErr) {
         console.error(`Dispatch error for call ${call.id}:`, dispatchErr);
+        failed++;
+        if (failureReasons.length === 0) {
+          failureReasons.push(`dispatch: ${String(dispatchErr).slice(0, 200)}`);
+        }
         await admin
           .from("calls")
           .update({ status: "failed" })
@@ -191,7 +211,7 @@ Deno.serve(async (req: Request) => {
   }
 
   return new Response(
-    JSON.stringify({ scheduled, total_users: users.length }),
+    JSON.stringify({ scheduled, failed, total_users: users.length, sample_error: failureReasons[0] ?? null }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });

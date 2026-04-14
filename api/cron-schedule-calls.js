@@ -17,21 +17,30 @@ export default async function handler(req, res) {
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const cronSharedSecret = process.env.CRON_SHARED_SECRET;
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || (!serviceRoleKey && !cronSharedSecret)) {
     console.error('[cron-schedule-calls] Missing env vars', {
       hasSupabaseUrl: !!supabaseUrl,
       hasServiceRoleKey: !!serviceRoleKey,
+      hasCronSharedSecret: !!cronSharedSecret,
     });
     return res.status(500).json({ error: 'Missing env vars' });
   }
+
+  // Supabase's gateway still enforces a Bearer token to route to the function.
+  // Anon key is enough for that — the edge function itself re-auths via SRK or
+  // the X-Cron-Secret header we send below.
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const gatewayToken = serviceRoleKey || anonKey;
 
   try {
     const resp = await fetch(`${supabaseUrl}/functions/v1/ai-schedule-calls`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${serviceRoleKey}`,
+        Authorization: `Bearer ${gatewayToken}`,
         'Content-Type': 'application/json',
+        ...(cronSharedSecret ? { 'X-Cron-Secret': cronSharedSecret } : {}),
       },
     });
 

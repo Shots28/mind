@@ -1,11 +1,9 @@
 import { getSupabaseAdmin } from "./supabase-admin.ts";
 import { getUserContext } from "./agent-actions.ts";
 
-/**
- * Build VAPI custom tool definitions with server URL for server-side execution.
- * Tools are defined at the assistant level (not model.tools) so VAPI routes
- * tool calls to the webhook without interrupting the conversation.
- */
+// VAPI rejects assistant-level `tools` ("assistant.property tools should not
+// exist"); tools must be nested under `model.tools`. Each tool gets a
+// per-tool `server.url` so VAPI posts tool-call events to our webhook.
 function buildToolDefinitions(serverUrl: string) {
   return [
     {
@@ -178,10 +176,6 @@ Wrap up warmly. Keep it to one sentence.
 - NEVER recite the same phrases. Vary your language every call to feel natural.`;
 }
 
-/**
- * Build a full VAPI assistant config for an outbound call.
- * Tools are defined at the assistant level with server.url for server-side execution.
- */
 export async function buildAssistantConfig(
   userId: string,
   callId: string,
@@ -212,12 +206,12 @@ export async function buildAssistantConfig(
       provider: "openai",
       model: "gpt-4o-mini",
       messages: [{ role: "system", content: systemPrompt }],
+      tools: buildToolDefinitions(webhookUrl),
     },
     voice: {
       provider: "11labs",
       voiceId: voiceId || "21m00Tcm4TlvDq8ikWAM",
     },
-    tools: buildToolDefinitions(webhookUrl),
     maxDurationSeconds: 600,
     silenceTimeoutSeconds: 30,
     metadata: {

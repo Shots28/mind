@@ -629,3 +629,55 @@ This also means any other surface (notifications panel, future deep-links from A
 ---
 
 33. **If a destination can't show the thing the link promised, the link must carry the context to rescue it.** This bug is the same shape as #28: a navigation promise ("take me to this task") fulfilled only under default conditions (the task is active, on the filter the view defaults to). Both bugs trace to the same habit: *navigate to a route, hope the state lines up*. The fix in both cases is to carry enough information in the URL that the destination can recover the context regardless of its local state — `?project=` narrows the list, `?task=` opens the specific record. Rule: if your nav-side code knows *what* the user wants to see, encode that in the URL; don't rely on the destination view's defaults to happen to match.
+
+---
+
+## Round 13 — "It's still not calling me"
+
+User reported after 12 rounds of fixes: *"it's still not calling me though so nothing matters if it doesn't call me. I can't even do that. That's like core to the app"*
+
+DB inspection showed: all prior calls for user A came from the manual test button. User B — who met every scheduling criterion (verified phone, onboarding complete, active, due in their timezone) — had **zero** calls ever dispatched. The cron had never once successfully reached the edge function in production.
+
+Two stacked production blockers, both invisible from the frontend.
+
+### 30. Cron-Schedule-Calls Auth Silently Broken in Prod (Critical)
+
+**Symptom:** `GET /api/cron-schedule-calls` (with `user-agent: vercel-cron/1.0`) returned `{"error":"Missing env vars"}`. Vercel cron ran every 5 min and silently failed every single invocation. After fixing that, it flipped to returning `"Unauthorized"` from the edge function.
+
+**Root Cause (two-part):**
+
+1. `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` were not set in Vercel production env — the cron handler bailed before ever calling Supabase. Setting them fixed nothing further because…
+2. The Supabase edge function's own `Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")` is **auto-injected by Supabase** and cannot be overridden via `supabase secrets set`. After any service-role-key rotation (or any scenario where the key I had stored locally differed from whatever Supabase's gateway auto-injects), the two sides can disagree. My stored SRK passed Supabase's gateway (PostgREST accepted it) but the value the Edge Runtime sees is different — the function's `authHeader.includes(serviceKey)` check failed. There is no CLI path to fetch the exact value Supabase's runtime is currently using, so you can't blindly "sync" them.
+
+**Fix:** Introduced a `CRON_SHARED_SECRET` shared between Vercel and Supabase that is fully under our control on both sides. The edge function now accepts **either** the SRK **or** a matching `X-Cron-Secret` header. The Vercel cron handler sends both. This decouples cron auth from the SRK entirely — future SRK rotations can't break the cron, and vice versa.
+
+Concretely:
+- `openssl rand -hex 32` → set on Supabase via `supabase secrets set CRON_SHARED_SECRET=…` and on Vercel via `vercel env add CRON_SHARED_SECRET production`.
+- All three cron-invoked edge functions (`ai-schedule-calls`, `ai-retry-calls`, `google-renew-watches`) updated to accept SRK **or** `X-Cron-Secret`.
+- All three Vercel cron handlers (`api/cron-schedule-calls.js`, `api/cron-retry-calls.js`, `api/cron-renew-watches.js`) updated to send `X-Cron-Secret` alongside the existing Bearer header, and to fall back to the anon key for the Supabase gateway hop if SRK isn't present.
+
+**Files:** `supabase/functions/{ai-schedule-calls,ai-retry-calls,google-renew-watches}/index.ts`, `api/cron-{schedule-calls,retry-calls,renew-watches}.js`.
+
+### 31. VAPI Rejects All Outbound Calls: `assistant.property tools should not exist` (Critical)
+
+**Symptom:** Once cron auth worked, the next run produced a `calls` row with `status=failed` and `vapi_call_id=null`. The edge function's `200 OK` response hid the per-user failure — I had to add per-user diagnostics to the response body to see VAPI's actual 400 response: `{"message":["assistant.property tools should not exist"],"error":"Bad Request","statusCode":400}`.
+
+**Root Cause:** [`_shared/assistant-config.ts`](supabase/functions/_shared/assistant-config.ts) placed `tools` at the root of the `assistant` object. A stale comment in the file explicitly claimed this was **correct** ("Tools are defined at the assistant level (not model.tools) so VAPI routes tool calls to the webhook without interrupting the conversation"). VAPI's current API rejects assistant-level `tools` entirely; they must be nested under `model.tools`. No one noticed because the only code path exercised in testing was the manual test button by user A, and *that call path succeeded at the VAPI level* (got a `vapi_call_id`) but then got stuck in `status=scheduled` because of an unrelated webhook issue — so the VAPI schema error was masked by a downstream failure that made the call look "mostly working."
+
+**Fix:** Moved `tools` from the root of the assistant object to `model.tools`. Replaced the misleading top-of-file doc comment with an accurate one that names the failure mode so this doesn't get reverted.
+
+**File:** `supabase/functions/_shared/assistant-config.ts`
+
+Verified end-to-end: next cron run inserted `calls` row `985a6290-…` for user B with `vapi_call_id: 019d89fc-…` and `status=scheduled`. VAPI accepted the call and dispatched to the user's phone.
+
+### Lessons
+
+34. **A green `200 OK` response from a cron handler is worth nothing if the handler's body says `{"error":"Missing env vars"}`.** Vercel's cron UI shows the HTTP status of the handler, not the semantic status of what the handler did. Any cron handler that can fail after returning 200 (because it decided to `res.status(200).json({...})` before realizing its env was broken) is *undetectable from the outside* — and in this case, it went undetected for the entire life of the app. Rule for cron handlers: non-success states must return non-2xx HTTP codes. `res.status(500).json({ error: 'Missing env vars' })` was right; the earlier code that already had that line was fine. What I hadn't checked, across 12 rounds of other QA, was the cron handler's response body at all.
+
+35. **`SUPABASE_SERVICE_ROLE_KEY` is reserved in Supabase Edge Runtime and cannot be safely shared as a cross-platform secret.** Supabase's runtime auto-injects the current project's SRK and `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=…` is a no-op (or worse, silently accepted but ignored). You can't read the value back. If your Vercel cron authenticates to a Supabase edge function using the SRK, you're one key rotation away from a silent mismatch with no useful error. Use a dedicated shared secret under a non-reserved name for any cross-platform cron auth.
+
+36. **If a 500-class error path is unreachable in the happy path, it's untested — and when it fires it's often the last thing you debug.** The edge function aggregated all per-user failures into a silent counter. The cron response was `{scheduled: 0, total_users: 2}` both when the function genuinely had no due users *and* when every due user hit a 400 from a downstream service. Either add per-call error fanout to the response (what I did — added a `diagnostics` array), or wire failed dispatches to a monitoring table with a retention policy. Without either, you can't tell "nobody was due" from "everybody was due but all got rejected."
+
+37. **Stale doc comments are actively dangerous when the API they document has changed.** The `// Tools are defined at the assistant level (not model.tools)` comment was written the last time someone read the VAPI docs. Between then and now, VAPI moved tools under `model.tools`. The comment survived, misleading every future reader (including me, twice — I almost moved them back after my first fix). When a library's API changes, grep the codebase for comments that reference the old shape and update them too. A wrong comment is worse than no comment.
+
+38. **Manual test-mode paths hide production bugs because they exercise the happy middle, not the failure boundaries.** The frontend "test call" button (auth'd via user JWT, bypasses dup/limit checks, fakes `isUserDueForCall`) took the same `buildAssistantConfig` → VAPI POST path as cron — but the *only* code difference that mattered was which `user.phone_number` got passed. User A ran test calls. User A happened to have a phone number whose VAPI response included the tools-schema error *but VAPI still returned a 2xx and a call_id*. So user A's manual tests looked like they worked (got a vapi_call_id) but silently broke the webhook downstream. Nobody ever tried a cron-initiated call for any user. When the only way to test a production code path is to wait for a cron to fire for a user due in their timezone, that path is untested. Add a `test_mode: true` option to the real CRON entrypoint that exercises the exact same code but without touching real phones, and run it from CI.
