@@ -13,8 +13,6 @@ dist-ssr
 *.local
 
 # Environment
-.env
-.env.local
 .env.*.local
 
 # Editor directories and files
@@ -29,3 +27,4 @@ dist-ssr
 *.sw?
 .vercel
 .claude/
+config.bat

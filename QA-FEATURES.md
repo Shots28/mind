@@ -152,7 +152,28 @@ Commit: `34308f7` — *Normalize voice-agent mood to UI enum or null*
 - Unit-tested the three-branch logic across 4 cases (0/0, 0/3, 1 done, 2 mixed) — all produce the expected prompt fragment.
 - Deployed via `supabase functions deploy ai-vapi-webhook ai-schedule-calls ai-retry-calls` (all three reference the shared `assistant-config.ts` bundle, so all need redeploying).
 
-Commit: this pass — *Distinguish "no habits yet" from "no habits today" in voice-agent prompt*
+Commit: `ac9adff` — *Distinguish "no habits yet" from "no habits today" in voice-agent prompt*
+
+### 10. Empty `task_title` / `habit_name` from VAPI silently completed random work (high severity, AI-first gap)
+
+**Symptom:** If VAPI's LLM emits `complete_task({task_title: ""})` or `mark_habit_done({habit_name: ""})` — a schema violation, but LLMs occasionally produce them on ambiguous user utterances ("mark that done", "I did it") — the existing fuzzy-match logic would silently complete the **first** incomplete task/habit in the user's list. The user hears an optimistic ack ("Marked '' complete") and a random task on their list goes green. Potentially destructive if the user had been deferring a high-value task that now silently gets archived as completed.
+
+**Root cause:** `completeTask` / `markHabitDone` / `createJournalEntry` all used `String.prototype.includes` for fuzzy matching. `"any string".includes("")` is always `true`, so an empty-string argument matches every row and `.find()` returns the first. Same trapdoor applies to `createTask` with empty `title` — a blank-title row would land in the DB and render as a ghost task on `/tasks`. The `async: true` webhook path makes it worse: the user-facing ack was already spoken before the DB write fires, so there's no "operation failed" signal the LLM can surface.
+
+**Fix (`supabase/functions/_shared/agent-actions.ts`):** Added early-return empty-guards to all four VAPI-facing action functions. Any input that is falsy or whitespace-only short-circuits with `{success: false, message: "No X provided"}` before the DB ever sees it.
+
+```ts
+if (!taskTitle || !taskTitle.trim()) {
+  return { success: false, message: "No task title provided" };
+}
+```
+
+**Verified:**
+- Reproduced pre-fix hazard in Node: `"Write launch post".includes("")` === `true`, `.find()` returns the first row — confirmed the silent-match behavior.
+- Post-fix unit test: 6 cases ("", " ", null, undefined, "call" → matches, "Write" → matches) all produce expected results — guards fire for all four empty-ish inputs, normal matching still works.
+- Deployed `ai-vapi-webhook`. Same guard pattern covers `markHabitDone`, `completeTask`, `createTask`, `createJournalEntry`.
+
+Commit: this pass — *Empty-guard VAPI tool-call inputs to prevent random-match completions*
 
 ## Verified working (no changes needed)
 
@@ -170,4 +191,5 @@ Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category 
 - **`async: true` VAPI tools detach user-facing confirmations from DB success.** The optimistic ack ("Added that to your list") goes out before the write completes. If the write fails — constraint violation, type mismatch, missing FK — the user still hears success. Treat every `agent-actions.ts` writer as if the LLM will pass malformed input: gate DB-constrained columns (date formats, enum values, FK existence) with a normalizer that either coerces to a valid value or drops the problematic field but still saves the row. Never let an LLM paraphrase cause a task/habit/journal to silently disappear.
 - LLM tool inputs are "trusted" only in the sense that we asked for a format — the schema `description` field is a request, not an enforcement mechanism. Treat tool arguments like untrusted JSON: validate at the boundary of `agent-actions`.
 - **"No DB CHECK constraint" does not mean "column accepts anything safely."** `journal_entries.mood` has no `CHECK` but the UI only renders five values — so missing constraint = silently-lost data, not safely-stored data. When a column's write path is LLM-driven and its read path has a finite render set (emoji map, icon enum, color table), normalize at write time to the UI's value set. The DB-write boundary is the last place you can force consistency between what the LLM said and what the user sees.
+- **`String.includes("")` is always true.** Any fuzzy-match that uses `str.toLowerCase().includes(needle.toLowerCase())` must guard against an empty `needle` before the match runs, or the "first-in-list" match will fire for every call that happens to get an empty argument. LLM tool calls are the main place this bites — the schema says `required`, but tool arguments can still arrive empty when the user's utterance was too vague to extract a noun. Treat empty strings as "no match attempted," not "wildcard."
 - Displayable data the voice agent captures but the UI doesn't render becomes an invisible feature. Audit every tool-call parameter: if it ends up in a column, there should be a visible UI surface for it (even a subtle one — a 🙂 emoji in a header row is enough). Otherwise users get the feeling of "the AI listened but nothing happened."

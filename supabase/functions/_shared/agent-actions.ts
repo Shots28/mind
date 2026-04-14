@@ -113,6 +113,15 @@ async function getUserLocalDate(userId: string): Promise<string> {
 
 // Mark a habit as done for today
 export async function markHabitDone(userId: string, habitName: string) {
+  // Guard against empty / whitespace-only habit_name. The substring match
+  // below uses `.includes()`, and `"anything".includes("")` === true, so an
+  // empty habitName would match the first active habit and silently log it
+  // as done. LLM schemas mark the param required, but schema violations do
+  // happen — the cost of an extra check is trivial vs. silently corrupting
+  // state on behalf of the user.
+  if (!habitName || !habitName.trim()) {
+    return { success: false, message: "No habit name provided" };
+  }
   const admin = getSupabaseAdmin();
   const today = await getUserLocalDate(userId);
 
@@ -161,6 +170,12 @@ export async function markHabitDone(userId: string, habitName: string) {
 
 // Complete an existing task
 export async function completeTask(userId: string, taskTitle: string) {
+  // Same empty-guard as markHabitDone — `"".includes("")` matches every task,
+  // so without this check an empty title would complete the first incomplete
+  // task the user has, at random, on their behalf.
+  if (!taskTitle || !taskTitle.trim()) {
+    return { success: false, message: "No task title provided" };
+  }
   const admin = getSupabaseAdmin();
 
   // Find matching task (case-insensitive)
@@ -231,6 +246,12 @@ export async function createTask(
   dueDate?: string,
   priority?: string
 ) {
+  // Don't let an empty or whitespace-only title land in the DB. The UI would
+  // render a blank row on /tasks, and the optimistic ack already said "Added
+  // task '' to the list" — both broken states.
+  if (!title || !title.trim()) {
+    return { success: false, message: "No task title provided" };
+  }
   const admin = getSupabaseAdmin();
 
   const { error } = await admin.from("tasks").insert({
@@ -256,6 +277,11 @@ export async function createJournalEntry(
   mood?: string,
   callId?: string
 ) {
+  // Empty content means we'd save a blank journal row — user-visible noise
+  // on /journal with no text, timestamped "from voice_agent." Drop it.
+  if (!content || !content.trim()) {
+    return { success: false, message: "No content provided" };
+  }
   const admin = getSupabaseAdmin();
 
   const { error } = await admin.from("journal_entries").insert({
