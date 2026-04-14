@@ -38,7 +38,21 @@ Commit: `b4e9777` — *Add click-to-edit for events in /today widget*
 
 Commits: `31306b1` — *Add Realtime subscriptions to Task, Habit, Journal contexts* + this pass — *Publish VAPI-written tables to supabase_realtime*
 
-### 3. VAPI tool-calls silently no-op'd (from prior session, committed this pass)
+### 3. Call History froze during live calls (critical for AI-first)
+
+**Symptom:** While a phone call is in flight, the VAPI webhook writes status transitions to the `calls` row (`scheduled` → `ringing` → `in-progress` → `completed`) and, at end-of-call, a transcript + summary. None of that surfaced in the Settings → Call History UI until the user reloaded the page or closed/reopened Settings. The voice experience felt disconnected from the visual UI.
+
+**Root cause:** `VoiceAgentContext` fetched `calls` once on mount and never subscribed. Compounding factor: even had a subscription existed, the `calls` table was not in the `supabase_realtime` publication.
+
+**Fix:**
+- Subscription in `VoiceAgentContext` on `calls` filtered by `user_id=eq.<uid>` with INSERT/UPDATE → `UPSERT_CALL`, DELETE → `DELETE_CALL`.
+- Migration `20260413230000_realtime_publication_for_calls.sql` adds `calls` to `supabase_realtime` idempotently.
+
+**Verified on prod:** Inserted a scheduled call via service-role → "Scheduled" row appeared at top of list within 3s. PATCH `status=ringing` → row re-rendered as "Ringing" live. PATCH `status=completed, duration_seconds=147, transcript=..., summary=...` → row flipped to `Completed · 2:27`, click expanded to reveal transcript + summary. All without reload.
+
+Commit: `ab0e70b` — *Realtime subscription + publication for VAPI call lifecycle*
+
+### 4. VAPI tool-calls silently no-op'd (from prior session, committed this pass)
 
 **Symptom:** Voice assistant's `mark_habit_done`, `complete_task`, `create_task`, `create_journal_entry` tool calls returned 200 to VAPI but never wrote to the DB. Users heard the assistant say "marked done" but the UI didn't reflect it.
 
@@ -59,3 +73,5 @@ Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category 
 - `EventsWidget` and `CalendarView` both need the master-id unwrap (`event._parentId || event.id`) before any `updateEvent`/`deleteEvent` call; recurrence instances are virtual rows, not DB rows.
 - Supabase Realtime is *two* things: the client-side `channel(...).on('postgres_changes', ...)` subscription AND server-side membership in the `supabase_realtime` publication. Adding a subscription without publishing the table is a silent no-op — the WebSocket connects, but nothing ever fires. Always pair new Realtime subscriptions with a publication migration.
 - `supabase secrets list` shows **digests** (SHA-256-ish hashes), not plaintext values. Can't use it to recover a webhook HMAC secret for local replay; simulate at the DB layer with the service-role key instead.
+- Supabase Realtime `postgres_changes` with a `user_id=eq.<uid>` filter silently drops DELETE events unless the table has `REPLICA IDENTITY FULL` — the server can't evaluate the filter against `payload.old` when only the primary key is replicated. Fine for tables where hard-deletes don't happen externally (`calls`, `events` which soft-delete), but if you ever add an external hard-delete path to a filtered subscription, add `ALTER TABLE <t> REPLICA IDENTITY FULL` in the migration.
+- "AI-first real-time" means every DB table an external agent (voice, cron, integration) writes to must have both a client subscription *and* publication membership — otherwise the in-flight user sees stale state for the whole interaction window. Checklist when adding a new agent-writable table: (1) ALTER PUBLICATION, (2) context-level subscription, (3) reducer cases, (4) recent-ids dedup for own-writes.
