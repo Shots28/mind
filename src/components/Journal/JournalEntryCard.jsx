@@ -7,6 +7,14 @@ import './Journal.css';
 
 const MAX_HEIGHT = 150;
 
+const MOOD_EMOJI = {
+  great: '😄',
+  good: '🙂',
+  okay: '😐',
+  bad: '🙁',
+  terrible: '😞',
+};
+
 export default function JournalEntryCard({ entry, onDelete }) {
   const { showToast } = useToast();
   const { undoDeleteEntry } = useJournal();
@@ -24,10 +32,15 @@ export default function JournalEntryCard({ entry, onDelete }) {
   return (
     <div className="journal-history-entry glass-panel">
       <div className="journal-entry-header">
-        <span className="journal-entry-time">
-          {entry.source === 'voice_agent' && <Phone size={12} className="journal-voice-badge" />}
-          {new Date(entry.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-        </span>
+        <div className="journal-entry-meta">
+          <span className="journal-entry-time">
+            {entry.source === 'voice_agent' && <Phone size={12} className="journal-voice-badge" />}
+            {new Date(entry.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {entry.mood && MOOD_EMOJI[entry.mood] && (
+            <span className="journal-entry-mood" title={entry.mood}>{MOOD_EMOJI[entry.mood]}</span>
+          )}
+        </div>
         {entry.contexts?.name && (
           <span className="journal-entry-context" style={{ color: entry.contexts.color }}>{entry.contexts.name}</span>
         )}

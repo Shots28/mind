@@ -84,8 +84,16 @@
 .journal-entry-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     margin-bottom: 8px;
+}
+
+.journal-entry-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin-right: auto;
 }
 
 .journal-entry-time {
@@ -107,8 +115,13 @@
     background: rgba(255, 255, 255, 0.05);
     padding: 2px 8px;
     border-radius: 4px;
-    margin-left: auto;
-    margin-right: 8px;
+}
+
+.journal-entry-mood {
+    font-size: 14px;
+    line-height: 1;
+    margin-left: 6px;
+    cursor: default;
 }
 
 .journal-entry-header .btn-icon {
