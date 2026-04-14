@@ -188,6 +188,25 @@ export async function completeTask(userId: string, taskTitle: string) {
   return { success: true, message: `Completed task: ${task.title}` };
 }
 
+// VAPI's LLM is instructed to pass YYYY-MM-DD, but it occasionally slips in
+// "tomorrow", "Thursday", or a relative phrase. The DB is DATE-typed and
+// rejects those with 22007, which in the webhook's async path means the
+// optimistic ack already went out ("Added that to your list") but the task
+// never actually landed. Better to drop the bad date and still save the task.
+function normalizeDueDate(raw?: string): string | null {
+  if (!raw) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+// tasks.priority has a CHECK constraint accepting only these four values.
+// The tool schema declares the same enum, but the LLM sometimes paraphrases
+// ("super urgent", "medium"). Same async-fail mode as the date — fall back
+// to "normal" instead of dropping the task on the floor.
+const VALID_PRIORITIES = new Set(["urgent", "high", "normal", "low"]);
+function normalizePriority(raw?: string): string {
+  return raw && VALID_PRIORITIES.has(raw) ? raw : "normal";
+}
+
 // Create a new task
 export async function createTask(
   userId: string,
@@ -200,8 +219,8 @@ export async function createTask(
   const { error } = await admin.from("tasks").insert({
     user_id: userId,
     title,
-    due_date: dueDate || null,
-    priority: priority || "normal",
+    due_date: normalizeDueDate(dueDate),
+    priority: normalizePriority(priority),
     category: "up_next",
     is_completed: false,
   });
