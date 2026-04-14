@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useReducer, useCallback, u
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { expandRecurringEvent } from '../lib/recurrence';
+import { useRecentIds } from '../lib/useRecentIds';
 
 const EventContext = createContext({});
 
@@ -29,25 +30,6 @@ function reducer(state, action) {
     default:
       return state;
   }
-}
-
-// Track recently dispatched event IDs to deduplicate Realtime echoes
-function useRecentIds() {
-  const recentIds = useRef(new Map());
-
-  const add = useCallback((id) => {
-    recentIds.current.set(id, Date.now());
-    // Clean up old entries
-    for (const [key, time] of recentIds.current) {
-      if (Date.now() - time > 5000) recentIds.current.delete(key);
-    }
-  }, []);
-
-  const has = useCallback((id) => {
-    return recentIds.current.has(id) && (Date.now() - recentIds.current.get(id)) < 5000;
-  }, []);
-
-  return { add, has };
 }
 
 export function EventProvider({ children }) {

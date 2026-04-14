@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useReducer, useCallback, u
 import { supabase } from '../lib/supabase';
 import { toLocalDateString, isSameLocalDay } from '../lib/dates';
 import { useAuth } from './AuthContext';
+import { useRecentIds } from '../lib/useRecentIds';
 
 const TaskContext = createContext({});
 
@@ -44,6 +45,7 @@ function sortByPriority(tasks) {
 export function TaskProvider({ children }) {
   const { user } = useAuth();
   const [state, dispatch] = useReducer(reducer, initialState);
+  const recentIds = useRecentIds();
 
   const fetchTasks = useCallback(async () => {
     if (!user) return;
@@ -62,6 +64,40 @@ export function TaskProvider({ children }) {
     else dispatch({ type: 'SET_TASKS', payload: [] });
   }, [user, fetchTasks]);
 
+  // Realtime subscription so external writes (VAPI voice-agent tool calls,
+  // other devices, background workers) show up without a page reload.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('tasks-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tasks',
+        filter: `user_id=eq.${user.id}`,
+      }, async (payload) => {
+        const id = payload.new?.id || payload.old?.id;
+        if (recentIds.has(id)) return;
+
+        if (payload.eventType === 'INSERT') {
+          // Rehydrate joined relations (contexts, projects) since the raw
+          // Realtime payload only includes base columns.
+          const { data } = await supabase
+            .from('tasks')
+            .select('*, contexts(name, color), projects(name, color)')
+            .eq('id', id)
+            .single();
+          dispatch({ type: 'ADD_TASK', payload: data || payload.new });
+        } else if (payload.eventType === 'UPDATE') {
+          dispatch({ type: 'UPDATE_TASK', payload: payload.new });
+        } else if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_TASK', payload: payload.old.id });
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [user, recentIds]);
+
   const createTask = async (taskData) => {
     const { data, error } = await supabase
       .from('tasks')
@@ -69,11 +105,13 @@ export function TaskProvider({ children }) {
       .select('*, contexts(name, color), projects(name, color)')
       .single();
     if (error) throw error;
+    recentIds.add(data.id);
     dispatch({ type: 'ADD_TASK', payload: data });
     return data;
   };
 
   const updateTask = async (id, updates) => {
+    recentIds.add(id);
     dispatch({ type: 'UPDATE_TASK', payload: { id, ...updates } });
     const { error } = await supabase
       .from('tasks')
@@ -107,6 +145,7 @@ export function TaskProvider({ children }) {
 
   const deleteTask = async (id, { undo: withUndo } = {}) => {
     const task = state.tasks.find(t => t.id === id);
+    recentIds.add(id);
     dispatch({ type: 'DELETE_TASK', payload: id });
 
     if (withUndo && task) {

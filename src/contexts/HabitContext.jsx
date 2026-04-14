@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useReducer, useCallback, useMemo,
 import { supabase } from '../lib/supabase';
 import { toLocalDateString } from '../lib/dates';
 import { useAuth } from './AuthContext';
+import { useRecentIds } from '../lib/useRecentIds';
 
 const HabitContext = createContext({});
 
@@ -62,6 +63,8 @@ function isHabitDueOnDay(habit, day) {
 export function HabitProvider({ children }) {
   const { user } = useAuth();
   const [state, dispatch] = useReducer(reducer, initialState);
+  const recentHabitIds = useRecentIds();
+  const recentLogIds = useRecentIds();
 
   const fetchHabits = useCallback(async () => {
     if (!user) return;
@@ -110,6 +113,58 @@ export function HabitProvider({ children }) {
     }
   }, [user, fetchHabits, fetchTodayLogs, fetchWeekLogs]);
 
+  // Realtime: VAPI mark_habit_done inserts into habit_logs. The widget's
+  // toggle state derives from todayLogs so the log channel matters most;
+  // we also watch habits for external create/rename.
+  useEffect(() => {
+    if (!user) return;
+    const today = toLocalDateString();
+    const habitsChannel = supabase
+      .channel('habits-realtime')
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'habits',
+        filter: `user_id=eq.${user.id}`,
+      }, async (payload) => {
+        const id = payload.new?.id || payload.old?.id;
+        if (recentHabitIds.has(id)) return;
+        if (payload.eventType === 'INSERT') {
+          const { data } = await supabase
+            .from('habits').select('*, contexts(name, color)').eq('id', id).single();
+          if (data?.is_active) dispatch({ type: 'ADD_HABIT', payload: data });
+        } else if (payload.eventType === 'UPDATE') {
+          if (!payload.new.is_active) dispatch({ type: 'DELETE_HABIT', payload: id });
+          else dispatch({ type: 'UPDATE_HABIT', payload: payload.new });
+        } else if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_HABIT', payload: payload.old.id });
+        }
+      })
+      .subscribe();
+
+    const logsChannel = supabase
+      .channel('habit-logs-realtime')
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'habit_logs',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        const id = payload.new?.id || payload.old?.id;
+        if (recentLogIds.has(id)) return;
+        const logDate = payload.new?.date || payload.old?.date;
+        if (payload.eventType === 'INSERT') {
+          if (logDate === today) dispatch({ type: 'ADD_LOG', payload: payload.new });
+          fetchWeekLogs();
+        } else if (payload.eventType === 'DELETE') {
+          if (logDate === today) dispatch({ type: 'REMOVE_LOG', payload: payload.old.id });
+          fetchWeekLogs();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(habitsChannel);
+      supabase.removeChannel(logsChannel);
+    };
+  }, [user, recentHabitIds, recentLogIds, fetchWeekLogs]);
+
   const createHabit = async (habitData) => {
     const { data, error } = await supabase
       .from('habits')
@@ -117,11 +172,13 @@ export function HabitProvider({ children }) {
       .select('*, contexts(name, color)')
       .single();
     if (error) throw error;
+    recentHabitIds.add(data.id);
     dispatch({ type: 'ADD_HABIT', payload: data });
     return data;
   };
 
   const updateHabit = async (id, updates) => {
+    recentHabitIds.add(id);
     dispatch({ type: 'UPDATE_HABIT', payload: { id, ...updates } });
     const { error } = await supabase
       .from('habits')
@@ -134,6 +191,7 @@ export function HabitProvider({ children }) {
 
   const deleteHabit = async (id, { undo: withUndo } = {}) => {
     const habit = state.habits.find(h => h.id === id);
+    recentHabitIds.add(id);
     dispatch({ type: 'DELETE_HABIT', payload: id });
 
     if (withUndo && habit) {
@@ -183,6 +241,7 @@ export function HabitProvider({ children }) {
     const logs = isToday ? state.todayLogs : (state.dateLogs[targetDate] || []);
     const existing = logs.find(l => l.habit_id === habitId);
     if (existing) {
+      recentLogIds.add(existing.id);
       if (isToday) {
         dispatch({ type: 'REMOVE_LOG', payload: existing.id });
       } else {
@@ -196,6 +255,7 @@ export function HabitProvider({ children }) {
         .select()
         .single();
       if (!error) {
+        recentLogIds.add(data.id);
         if (isToday) {
           dispatch({ type: 'ADD_LOG', payload: data });
         } else {
