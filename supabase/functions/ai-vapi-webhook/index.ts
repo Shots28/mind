@@ -138,13 +138,11 @@ async function handleStatusUpdate(
 }
 
 // Handle end-of-call report
-async function handleEndOfCallReport(body: Record<string, unknown>) {
+async function handleEndOfCallReport(
+  body: Record<string, unknown>,
+  metadata: Record<string, string>
+) {
   const msg = body.message as Record<string, unknown> || {};
-  const call = msg.call as Record<string, unknown> || {};
-  const metadata = call.metadata as Record<string, string> ||
-    msg.metadata as Record<string, string> ||
-    body.metadata as Record<string, string> ||
-    {};
   const callId = metadata?.callId;
   const userId = metadata?.userId;
 
@@ -295,10 +293,30 @@ Deno.serve(async (req: Request) => {
   const messageType = body.message?.type || body.type;
 
   // Extract metadata from call object (VAPI nests it under message.call.metadata)
-  const metadata = body.message?.call?.metadata ||
+  const metadata: Record<string, string> = body.message?.call?.metadata ||
     body.message?.metadata ||
     body.metadata ||
     {};
+
+  // tool-calls events from VAPI do NOT include message.call.metadata, even
+  // though other event types do. Without userId we silently no-op every tool
+  // invocation (HTTP 200 to VAPI but zero DB writes — exactly the "tools
+  // didn't fire" symptom). VAPI sets X-Call-Id on every webhook request;
+  // look it up in the calls table to recover user context.
+  if (!metadata.userId) {
+    const xCallId = req.headers.get("x-call-id");
+    if (xCallId) {
+      const { data: callRow } = await getSupabaseAdmin()
+        .from("calls")
+        .select("id, user_id")
+        .eq("vapi_call_id", xCallId)
+        .maybeSingle();
+      if (callRow) {
+        metadata.userId = callRow.user_id;
+        metadata.callId = callRow.id;
+      }
+    }
+  }
 
   console.log("Webhook event:", messageType, "metadata:", JSON.stringify(metadata));
 
@@ -390,7 +408,7 @@ Deno.serve(async (req: Request) => {
       }
 
       case "end-of-call-report": {
-        await handleEndOfCallReport(body);
+        await handleEndOfCallReport(body, metadata);
         return new Response("OK", { status: 200 });
       }
 
