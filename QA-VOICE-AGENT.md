@@ -381,3 +381,58 @@ Why it slipped past previous QA: earlier rounds verified the call dispatched and
 15. **Know the exact shape of third-party webhook payloads — don't guess.** VAPI uses OpenAI-shaped tool calls (`function.name`, `function.arguments` as JSON string). Mismatching the shape fails silently because JavaScript will happily read `undefined` from any path. Always log the full payload once during development so the correct paths are visible, and parse defensively (handle both flat and nested shapes) for any field that different SDK versions might emit differently.
 
 16. **Prefer substring matching to enums when external systems define the vocabulary.** When a third-party emits status/reason strings we don't own, exact-match lookups rot: their vocabulary expands, and every new value silently slots into our default branch. Pattern-match on meaningful substrings instead — it's more forgiving, and a new error variant is still recognized as an error.
+
+---
+
+## QA Round 7 — 2026-04-13 (Deep code audit #3)
+
+Browser QA still blocked (Chrome MCP permission denies every navigation attempt, user confirmed no prompt ever appears). Continued static analysis across Google Calendar sync and voice-agent paths.
+
+### 19. All-Day Event End Date Off-By-One for UTC+ Timezones (High)
+
+**Symptom:** When an all-day event is pushed to Google Calendar, users in any UTC+ timezone (Europe, Asia, Australia, Africa east of GMT) would see the end date rendered one day short. Single-day all-day events end up with `start == end`, which Google treats as zero-duration.
+
+**Root Cause:** Google's all-day end date is exclusive, so we must advance by one day before writing. The code used local-time arithmetic:
+
+```js
+const end = new Date(endDate + "T00:00:00");  // parsed as LOCAL midnight
+end.setDate(end.getDate() + 1);                // local-time day increment
+endDate = end.toISOString().substring(0, 10);  // UTC slice
+```
+
+For a user in UTC+5 with `endDate = "2026-04-13"`:
+- `new Date("2026-04-13T00:00:00")` = local midnight = `2026-04-12T19:00:00Z`
+- `setDate(+1)` → `2026-04-13T19:00:00Z`
+- `.toISOString().substring(0,10)` → **"2026-04-13"** (wanted "2026-04-14")
+
+Same bug, worse, for UTC+12: the added day gets swallowed entirely because the local-time base is already the previous UTC day. The edge function runtime itself happens to run in UTC (Deno on Supabase), so in production this specific code runs correctly — BUT the logic is still fragile: any future runtime change, local test run, or reuse of the helper in a browser context reintroduces the bug. Fixing to UTC-only math is the safe call.
+
+**Fix:** Use explicit UTC parsing and UTC-date arithmetic:
+
+```js
+const end = new Date(endDate + "T00:00:00Z");
+end.setUTCDate(end.getUTCDate() + 1);
+endDate = end.toISOString().substring(0, 10);
+```
+
+**File:** `supabase/functions/google-sync-push/index.ts:28-30`
+
+---
+
+### 20. Voice Agent Using Stale Sonnet Snapshot for Journal Generation (Low)
+
+**Symptom:** Journal generation after a call was pinned to `claude-sonnet-4-20250514`, missing a full model generation of quality improvements and pricing updates.
+
+**Fix:** Bumped to `claude-sonnet-4-6` (current latest Sonnet per system guidance). No API-shape changes required.
+
+**File:** `supabase/functions/ai-vapi-webhook/index.ts:203`
+
+---
+
+## QA Round 7 — Lessons Learned
+
+17. **Date-increment helpers are where timezone bugs hide.** `Date.setDate()` and `Date.getDate()` operate in *local* time on the runtime's system clock. The same file reads/writes ISO strings (UTC) everywhere else, so it's easy to slip a local-time increment into a UTC pipeline without noticing. Default to `setUTCDate`/`getUTCDate` whenever the input and output are both UTC ISO strings — the local variants should only be used when you *want* DST-aware local arithmetic.
+
+18. **"Works in production" ≠ "correct"** when the runtime's timezone happens to mask the bug. Supabase Edge Functions run in UTC, so local-time math that's equivalent to UTC math appears fine forever — until the code gets copied into a browser, a local dev run with `TZ=` set, or a differently-configured runtime. Prefer unambiguously timezone-specified math even when the ambient timezone currently makes it a no-op.
+
+19. **Keep external model IDs current.** Model SDKs bump regularly and older snapshots don't always roll forward pricing/latency improvements. A periodic grep for pinned model versions (`claude-*`, `gpt-*`) against the current system-documented latest is cheap insurance.

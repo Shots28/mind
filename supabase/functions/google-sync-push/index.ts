@@ -24,9 +24,11 @@ function toGoogleEvent(event: Record<string, unknown>) {
     let endDate = event.end_date
       ? (event.end_date as string).substring(0, 10)
       : startDate;
-    // Google all-day end date is exclusive -- add one day
-    const end = new Date(endDate + "T00:00:00");
-    end.setDate(end.getDate() + 1);
+    // Google all-day end date is exclusive -- add one day. Use UTC math so the
+    // result is independent of the server's local timezone (JS Date + setDate
+    // operates in local time, which breaks for UTC+ zones).
+    const end = new Date(endDate + "T00:00:00Z");
+    end.setUTCDate(end.getUTCDate() + 1);
     endDate = end.toISOString().substring(0, 10);
 
     gEvent.start = { date: startDate };
