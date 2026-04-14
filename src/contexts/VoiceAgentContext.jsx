@@ -16,6 +16,15 @@ function reducer(state, action) {
       return { ...state, preferences: action.payload, loading: false };
     case 'SET_CALLS':
       return { ...state, calls: action.payload };
+    case 'UPSERT_CALL': {
+      const idx = state.calls.findIndex(c => c.id === action.payload.id);
+      if (idx === -1) return { ...state, calls: [action.payload, ...state.calls] };
+      const next = state.calls.slice();
+      next[idx] = { ...next[idx], ...action.payload };
+      return { ...state, calls: next };
+    }
+    case 'DELETE_CALL':
+      return { ...state, calls: state.calls.filter(c => c.id !== action.payload) };
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
     default:
@@ -56,6 +65,30 @@ export function VoiceAgentProvider({ children }) {
       dispatch({ type: 'SET_CALLS', payload: [] });
     }
   }, [user, fetchPreferences, fetchCalls]);
+
+  // Realtime: VAPI webhook writes status transitions (ringing, in-progress,
+  // completed/no-answer/failed) + transcript + summary to the calls row
+  // during and after a live phone call. Without this subscription the Call
+  // History UI stays frozen on the last-fetched state for the entire call.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('calls-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'calls',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          dispatch({ type: 'UPSERT_CALL', payload: payload.new });
+        } else if (payload.eventType === 'DELETE') {
+          dispatch({ type: 'DELETE_CALL', payload: payload.old.id });
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [user]);
 
   const updatePreferences = async (updates) => {
     if (!user) return;
