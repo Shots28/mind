@@ -280,3 +280,54 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 9. **Platform-aware UI hints** - Keyboard shortcut hints should detect the platform. Hardcoding "Ctrl" breaks Mac UX where users expect "⌘".
 
 10. **Deploy the trigger, not just the function** - Building a scheduler edge function is only half the job. Without a CRON trigger (Vercel cron, pg_cron, or external), the function sits idle and users never get called. Always verify the full invocation chain end-to-end.
+
+---
+
+## QA Round 5 — Additional Bugs Found & Fixed
+
+### 13. Scheduled Calls Never Fired — 5-Minute Window Too Tight (Critical)
+
+**Symptom:** Pro-plan Vercel cron runs every 5 min, but user set preferred time 1:30 PM and no call arrived. Reproduces whenever the cron invocation drifts past the tail of the acceptance window (e.g., Vercel fires at 13:35:20 for a 5-min schedule).
+
+**Root Cause:** `isUserDueForCall()` required `now - preferred` to fall in `[0, 5)` minutes. Vercel cron jitter (cold starts, queueing delays of 30s+) can push a fire-time past that window entirely, so the correct tick is skipped and the next tick has `diff >= 5` and is also rejected. Same bug affects any user whose Vercel cron run straddles the preferred minute boundary.
+
+**Fix:** Changed the time check to *"any time past preferred time today is due"* and let the already-present duplicate-today guard handle idempotency. This means a cron running every 5 min, every 15 min, hourly, or even once daily will all fire the call as soon as the run happens after the preferred time — no more missed windows from scheduling jitter.
+
+**File:** `supabase/functions/ai-schedule-calls/index.ts`
+
+---
+
+### 14. Duplicate-Call-Today Check Used UTC, Not Local Day (Medium)
+
+**Symptom:** For users whose preferred time crosses UTC midnight (e.g., 9 PM MDT = 3 AM UTC next day), the "already called today?" guard missed the existing call and the scheduler would dispatch a second one on the next tick.
+
+**Root Cause:** `.gte("scheduled_at", ${userToday}T00:00:00).lt("scheduled_at", ${userToday}T23:59:59)` compared a user-local date string to a UTC timestamptz column. Postgres interprets the naive string as UTC, so the window is the wrong 24 hours for any non-UTC user.
+
+**Fix:** Added `getUserLocalDayBoundsUTC()` helper that converts the user's local YYYY-MM-DD into correct UTC start/end ISO timestamps (handles DST and extreme offsets via Intl probe). Both the duplicate-today check and the monthly-limit check now use these bounds.
+
+**File:** `supabase/functions/ai-schedule-calls/index.ts`
+
+---
+
+### 15. CRON_SECRET Silently Returns 401 When Unset (Medium)
+
+**Symptom:** If `CRON_SECRET` env var wasn't configured in Vercel, every cron invocation returned 401 — `'Bearer <real-secret>' !== 'Bearer undefined'` — and nothing in the Vercel logs clearly pointed to the missing var.
+
+**Root Cause:** The handler did strict equality on an undefined secret. Also, on auth failure it returned generic 401 with no log context.
+
+**Fix:** 
+- If `CRON_SECRET` is set, it's required as before.
+- If `CRON_SECRET` is unset, fall back to checking the `vercel-cron` user-agent (downstream edge function is still protected by the service role key).
+- Both paths now log structured warnings on failure + log the status/body of the edge function response to Vercel function logs, so misconfiguration is visible.
+
+**Files:** `api/cron-schedule-calls.js`, `api/cron-retry-calls.js`
+
+---
+
+## QA Round 5 — Lessons Learned
+
+11. **Tight time windows + jittery cron = silent failure.** Any scheduler that says "fire if within N minutes of target" has to either (a) run more frequently than N or (b) tolerate late runs by treating the window as "anytime today after target, deduped by a per-day guard." Pick (b) unless you specifically need sub-N precision — it's robust to cron jitter, cold starts, plan downgrades, and missed ticks.
+
+12. **Never compare timezone-naive date strings against a timestamptz column.** Postgres interprets naive strings as UTC, which is almost never what you want for "user's today." Always convert the user's local day to correct UTC start/end bounds before filtering. Use an Intl-based probe (not a hardcoded `* 3600` offset) so DST and unusual zones work.
+
+13. **Defensive auth should fail loudly, not silently.** A 401 with no log line is indistinguishable from a 500 or a 200 with no effect. Always log which branch of the auth check rejected and what the request claimed to be — cron misconfiguration is one of the easiest problems to diagnose if you can see it, and one of the hardest if you can't.

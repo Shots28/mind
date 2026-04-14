@@ -85,28 +85,30 @@ Deno.serve(async (req: Request) => {
       if (!testUserId && !isUserDueForCall(user, now)) continue;
 
       const userToday = getUserLocalDate(now, user.timezone);
+      const { startUtc, endUtc } = getUserLocalDayBoundsUTC(userToday, user.timezone);
 
       // Skip duplicate and limit checks for test calls
       if (!testUserId) {
-        // Check no call already scheduled/completed today
+        // Check no call already scheduled/completed today (in user's local day)
         const { data: existingCalls } = await admin
           .from("calls")
           .select("id")
           .eq("user_id", user.user_id)
-          .gte("scheduled_at", `${userToday}T00:00:00`)
-          .lt("scheduled_at", `${userToday}T23:59:59`)
+          .gte("scheduled_at", startUtc)
+          .lt("scheduled_at", endUtc)
           .not("status", "in", '("failed","no-answer")')
           .limit(1);
 
         if (existingCalls && existingCalls.length > 0) continue;
 
-        // Check monthly limit
-        const monthStart = `${userToday.substring(0, 7)}-01`;
+        // Check monthly limit (user's local month)
+        const monthStartLocal = `${userToday.substring(0, 7)}-01`;
+        const { startUtc: monthStartUtc } = getUserLocalDayBoundsUTC(monthStartLocal, user.timezone);
         const { count } = await admin
           .from("calls")
           .select("id", { count: "exact", head: true })
           .eq("user_id", user.user_id)
-          .gte("scheduled_at", monthStart)
+          .gte("scheduled_at", monthStartUtc)
           .eq("status", "completed");
 
         if ((count || 0) >= MONTHLY_CALL_LIMIT) continue;
@@ -189,6 +191,40 @@ function getUserLocalDate(now: Date, timezone: string): string {
     .split("T")[0]; // YYYY-MM-DD
 }
 
+// Convert a YYYY-MM-DD in a given IANA timezone to the UTC ISO timestamps
+// that bound the start and end of that local day.
+function getUserLocalDayBoundsUTC(
+  localDate: string,
+  timezone: string
+): { startUtc: string; endUtc: string } {
+  // Probe at noon UTC of the target date, read back what that wall clock is in
+  // the target timezone, then compute the offset as the difference. Works for
+  // any IANA zone including positive/negative extremes and DST.
+  const probeUtc = new Date(`${localDate}T12:00:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(probeUtc);
+  const p = (t: string) => parseInt(parts.find((x) => x.type === t)?.value ?? "0", 10);
+  // Intl 'hour12: false' can return "24" at midnight — normalize to 0.
+  const hour = p("hour") === 24 ? 0 : p("hour");
+  const localAsUtcMs = Date.UTC(p("year"), p("month") - 1, p("day"), hour, p("minute"));
+  const offsetMs = localAsUtcMs - probeUtc.getTime();
+
+  const startUtcMs = Date.parse(`${localDate}T00:00:00Z`) - offsetMs;
+  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
+
+  return {
+    startUtc: new Date(startUtcMs).toISOString(),
+    endUtc: new Date(endUtcMs).toISOString(),
+  };
+}
+
 function isUserDueForCall(
   user: {
     timezone: string;
@@ -209,16 +245,17 @@ function isUserDueForCall(
   // Parse preferred time (HH:MM format from TIME column)
   const preferredTime = user.preferred_call_time.substring(0, 5); // "21:00"
 
-  // Check if within 5-minute window
   const [prefH, prefM] = preferredTime.split(":").map(Number);
   const [nowH, nowM] = userTime.split(":").map(Number);
 
   const prefMinutes = prefH * 60 + prefM;
   const nowMinutes = nowH * 60 + nowM;
-  const diff = nowMinutes - prefMinutes;
 
-  // Within 0-4 minutes after preferred time
-  if (diff < 0 || diff >= 5) return false;
+  // Call is "due" as long as we're past the preferred time for today.
+  // Idempotency is handled by the duplicate-call-today check below, so a cron
+  // running once a day or every 5 min both work. This makes scheduling robust
+  // against Vercel Hobby (daily-only) cron limits and any late/missed windows.
+  if (nowMinutes < prefMinutes) return false;
 
   // Get day of week in user's timezone
   const dayStr = new Intl.DateTimeFormat("en-US", {
