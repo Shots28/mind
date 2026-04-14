@@ -9,7 +9,7 @@ import TaskList, { TaskItem } from '../components/Tasks/TaskList';
 import TaskForm from '../components/Tasks/TaskForm';
 import Modal from '../components/Common/Modal';
 import EmptyState from '../components/Common/EmptyState';
-import { Plus, CheckSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, CheckSquare, ChevronLeft, ChevronRight, X, Folder } from 'lucide-react';
 import { toLocalDateString } from '../lib/dates';
 import './TasksView.css';
 
@@ -17,9 +17,15 @@ export default function TasksView() {
   const { completedTasks, getTasksByCategory, updateTask } = useTasks();
   const { activeContext } = useContexts();
   const { categories } = useCategories();
-  useProjects(); // Ensure projects are loaded for task.projects references
-  const [searchParams] = useSearchParams();
+  const { projects } = useProjects();
+  const [searchParams, setSearchParams] = useSearchParams();
   const projectFilter = searchParams.get('project');
+  const filteredProject = projectFilter ? projects.find(p => p.id === projectFilter) : null;
+  const clearProjectFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('project');
+    setSearchParams(next, { replace: true });
+  };
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [filter, setFilter] = useState('active');
   const [groupBy, setGroupBy] = useState('category');
@@ -98,6 +104,23 @@ export default function TasksView() {
 
   return (
     <div className="tasks-view">
+      {projectFilter && (
+        <div className="tasks-project-filter-banner">
+          <Folder size={14} style={filteredProject?.color ? { color: filteredProject.color } : undefined} />
+          <span>
+            Filtered by project: <strong>{filteredProject?.name || 'Unknown project'}</strong>
+          </span>
+          <button
+            type="button"
+            className="tasks-project-filter-clear"
+            onClick={clearProjectFilter}
+            aria-label="Clear project filter"
+          >
+            <X size={14} />
+            <span>Clear</span>
+          </button>
+        </div>
+      )}
       <div className="tasks-header-wrap">
         <div className="tasks-header">
           <div className="tasks-filters">
@@ -165,14 +188,28 @@ export default function TasksView() {
       )}
 
       {filter === 'active' && totalActive === 0 && (
-        <EmptyState
-          icon={CheckSquare}
-          title="No active tasks"
-          description="Your task list is clear. Add tasks to plan your day."
-          tips={["Tip: Use categories to separate urgent work from everything else."]}
-          action="New Task"
-          onAction={() => setShowTaskForm(true)}
-        />
+        projectFilter ? (
+          <EmptyState
+            icon={CheckSquare}
+            title={`No active tasks in "${filteredProject?.name || 'this project'}"`}
+            description={
+              filteredCompleted.length > 0
+                ? `This project has ${filteredCompleted.length} completed task${filteredCompleted.length === 1 ? '' : 's'}. Switch to "Completed" or "All" to see them.`
+                : 'This project has no tasks yet. Add one below, or clear the filter to see everything.'
+            }
+            action="New Task"
+            onAction={() => setShowTaskForm(true)}
+          />
+        ) : (
+          <EmptyState
+            icon={CheckSquare}
+            title="No active tasks"
+            description="Your task list is clear. Add tasks to plan your day."
+            tips={["Tip: Use categories to separate urgent work from everything else."]}
+            action="New Task"
+            onAction={() => setShowTaskForm(true)}
+          />
+        )
       )}
 
       <Modal isOpen={showTaskForm} onClose={() => setShowTaskForm(false)} title="New Task">

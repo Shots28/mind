@@ -580,3 +580,34 @@ Added three targeted tests: Jan 31 monthly produces Jan/Mar/May; Jan 31 monthly 
 28. **Tests that use easy dates hide calendar-math bugs forever.** Every existing recurrence test used a start day of 1 or 2. None exercised the month boundaries where things drift: 29/30/31, Feb 29. A code reader would assume "monthly expansion" was well-tested because there are 15+ recurrence tests — but the test surface was actually narrow. Adding day-31 and leap-Feb cases caught the bug instantly. When writing tests for date math, pick dates that are **adversarial to the calendar** (end of month, leap day, DST transitions, year boundaries), not dates that happen to fall on the first of the month.
 
 29. **BYMONTHDAY emitted but never consumed is a whole class of RRULE bugs.** `RecurrenceSelector` builds `RRULE:FREQ=MONTHLY;BYMONTHDAY=31` for "on the 31st" — but `parseRRule` strips the field into the `rule` object and nothing ever reads `rule.BYMONTHDAY`. The visible fix anchors on `eventStart.getDate()` which happens to equal the intended BYMONTHDAY value in practice, so no functional gap. Worth auditing the full RRULE surface (BYSETPOS, BYMONTH, WKST, BYYEARDAY) the next time recurrence gets touched — anything the selector produces but the expander ignores is a latent mismatch.
+
+---
+
+## QA Round 12 — Navigation Affordances + Filter State Visibility
+
+**Scope:** Re-tested the full vision map (TodayView dashboard, notifications, search, habit stats, project progress, cross-view navigation). Most math and data flows are solid post-Round 11. The gap this round is **navigation state not surfaced in the UI** — features silently change what you're looking at without telling you.
+
+### 28. "View all tasks" from a Project Card Silently Filters with No Banner or Clear Action (High)
+
+**Symptom:** On [ProjectsView](src/views/ProjectsView.jsx), each project card has a "View all tasks →" button that navigates to `/tasks?project=<uuid>`. [TasksView](src/views/TasksView.jsx) reads `?project=` and applies it to every grouping (category, project) and both filters (active, completed) — but renders **zero visual indication** that a filter is active. User clicks "View all tasks" on a project with 0 active / 1 completed and lands on a view that looks identical to the unfiltered empty state: *"No active tasks — Your task list is clear."* They have no way to know (a) that a project filter is applied, (b) which project, (c) that switching to "Completed" would reveal tasks, or (d) how to return to the full task list without retyping the URL.
+
+Compounded by the button label: "View **all** tasks" implies total visibility, but the default `filter='active'` only shows incomplete ones. So a project where every task is done always looks empty through this entrypoint.
+
+**Root Cause:** `TasksView` treated `projectFilter` as a silent predicate inside `useMemo` filters. The only other UI that respects query state is the `filter` / `groupBy` buttons — both of which have visible "active" styling. The project filter has no equivalent surface.
+
+**Fix:** [src/views/TasksView.jsx](src/views/TasksView.jsx), [src/views/TasksView.css](src/views/TasksView.css) —
+- Render a filter banner at the top of `TasksView` whenever `searchParams.get('project')` is set: shows the project's colored folder icon, "Filtered by project: **<name>**", and a "Clear" button that calls `setSearchParams` to drop the param.
+- When the active-tasks empty state renders under a project filter, swap the generic copy for `"No active tasks in \"<project>\""` and — if there are completed tasks matching the filter — surface the count so the user knows to switch tabs: *"This project has N completed tasks. Switch to 'Completed' or 'All' to see them."*
+- `useProjects()` now returns `{ projects }` instead of being called for its side effect; the banner needs the project name/color.
+
+**Files:** [src/views/TasksView.jsx](src/views/TasksView.jsx), [src/views/TasksView.css](src/views/TasksView.css)
+
+---
+
+## QA Round 12 — Lessons Learned
+
+30. **Query-string filters need the same visible affordances as button filters, or they're invisible features.** `TasksView` already had a "filter strip" pattern (Active / Completed / All as pill buttons with `.active` styling). The `?project=<uuid>` filter bypassed that pattern entirely — it silently constrained the data without touching the UI state. That works only as long as users reach the URL by accident or by our own links — but the whole feature *exists* to let users reach it from a project card, which means every real user of this feature sees filtered results with no signal of what filter is applied. Rule: if a filter changes what's on screen, the on-screen state must show it. "Respecting the URL param" is not enough — render the filter in the header the same way button filters render, or don't offer the deep link at all.
+
+31. **Empty states are contextual, not canonical.** One EmptyState block for "no active tasks" worked fine when there was one way to arrive at zero tasks (you have no tasks). Once a project deep-link can also produce zero matches, the same copy became a lie for that path — "your task list is clear" is wrong when you have 47 tasks but the current filter matches none. Empty states need to be parameterized on *why* the set is empty. Catalogue every code path that can produce the empty state, and either write distinct copy per path or make the copy generic enough to cover all of them honestly.
+
+32. **"View all" is a load-bearing label that must match the destination.** The project card says "View all tasks" but navigates to a view with a default `filter='active'` — so it really shows "View active tasks in this project." Either the label should read "View tasks" (and stay honest), or the destination should default to `filter='all'` when arriving via a project deep-link (and the banner makes it obvious what's being shown). We chose the banner + informative empty-state approach because it doesn't change the default behavior for users who reach `/tasks` directly. Label-destination mismatches are small individually but they erode trust fast: users stop clicking labels that have lied to them once.
