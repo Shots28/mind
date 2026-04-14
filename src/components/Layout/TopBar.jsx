@@ -112,7 +112,7 @@ const TopBar = ({ onOpenSettings }) => {
                         <div className="search-dropdown glass-panel">
                             {searchResults.map(task => (
                                 <button key={task.id} className="search-result" onClick={() => {
-                                    navigate('/tasks');
+                                    navigate(`/tasks?task=${task.id}`);
                                     setSearchQuery('');
                                     setShowSearchResults(false);
                                 }}>

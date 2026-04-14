@@ -14,16 +14,23 @@ import { toLocalDateString } from '../lib/dates';
 import './TasksView.css';
 
 export default function TasksView() {
-  const { completedTasks, getTasksByCategory, updateTask } = useTasks();
+  const { tasks, completedTasks, getTasksByCategory, updateTask } = useTasks();
   const { activeContext } = useContexts();
   const { categories } = useCategories();
   const { projects } = useProjects();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectFilter = searchParams.get('project');
+  const taskParam = searchParams.get('task');
   const filteredProject = projectFilter ? projects.find(p => p.id === projectFilter) : null;
+  const deepLinkedTask = taskParam ? tasks.find(t => t.id === taskParam) : null;
   const clearProjectFilter = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('project');
+    setSearchParams(next, { replace: true });
+  };
+  const clearTaskParam = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('task');
     setSearchParams(next, { replace: true });
   };
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -214,6 +221,9 @@ export default function TasksView() {
 
       <Modal isOpen={showTaskForm} onClose={() => setShowTaskForm(false)} title="New Task">
         <TaskForm defaultContextId={activeContext !== 'all' ? activeContext : ''} defaultDueDate={dateFilter || ''} onClose={() => setShowTaskForm(false)} />
+      </Modal>
+      <Modal isOpen={!!deepLinkedTask} onClose={clearTaskParam} title="Edit Task">
+        {deepLinkedTask && <TaskForm task={deepLinkedTask} onClose={clearTaskParam} />}
       </Modal>
     </div>
   );

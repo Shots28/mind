@@ -611,3 +611,21 @@ Compounded by the button label: "View **all** tasks" implies total visibility, b
 31. **Empty states are contextual, not canonical.** One EmptyState block for "no active tasks" worked fine when there was one way to arrive at zero tasks (you have no tasks). Once a project deep-link can also produce zero matches, the same copy became a lie for that path — "your task list is clear" is wrong when you have 47 tasks but the current filter matches none. Empty states need to be parameterized on *why* the set is empty. Catalogue every code path that can produce the empty state, and either write distinct copy per path or make the copy generic enough to cover all of them honestly.
 
 32. **"View all" is a load-bearing label that must match the destination.** The project card says "View all tasks" but navigates to a view with a default `filter='active'` — so it really shows "View active tasks in this project." Either the label should read "View tasks" (and stay honest), or the destination should default to `filter='all'` when arriving via a project deep-link (and the banner makes it obvious what's being shown). We chose the banner + informative empty-state approach because it doesn't change the default behavior for users who reach `/tasks` directly. Label-destination mismatches are small individually but they erode trust fast: users stop clicking labels that have lied to them once.
+
+### 29. Global Search Result Click Dumps User on Empty /tasks When the Task is Completed (Medium)
+
+**Symptom:** Type "design" into the top-bar search. Dropdown shows "Design mockups" — a completed task from the Website Redesign project. Click it. The search navigates to `/tasks` with no filter, no query param, no modal. Default filter is "Active"; the completed task isn't on the list. User sees an empty task view and has no way to know their click succeeded or where the task went.
+
+**Root Cause:** [TopBar.jsx](src/components/Layout/TopBar.jsx) line 114's search-result click called `navigate('/tasks')` with no payload. The view had no way to scope the destination to the specific task the user asked for.
+
+**Fix:**
+- Top bar now navigates to `/tasks?task=<id>` on search-result click.
+- [TasksView](src/views/TasksView.jsx) reads `?task=`, looks up the task in `tasks` (the full set, not the filtered `completedTasks`/`mustDoTasks` slices), and opens the existing `TaskForm` edit modal inline. Closing the modal strips the `task` param from the URL via `setSearchParams(..., { replace: true })` so the history entry doesn't trap users in the edit state.
+
+This also means any other surface (notifications panel, future deep-links from AI assistant replies) can deep-link to a task edit by navigating to `/tasks?task=<id>` — no new plumbing required.
+
+**Files:** [src/components/Layout/TopBar.jsx](src/components/Layout/TopBar.jsx), [src/views/TasksView.jsx](src/views/TasksView.jsx)
+
+---
+
+33. **If a destination can't show the thing the link promised, the link must carry the context to rescue it.** This bug is the same shape as #28: a navigation promise ("take me to this task") fulfilled only under default conditions (the task is active, on the filter the view defaults to). Both bugs trace to the same habit: *navigate to a route, hope the state lines up*. The fix in both cases is to carry enough information in the URL that the destination can recover the context regardless of its local state — `?project=` narrows the list, `?task=` opens the specific record. Rule: if your nav-side code knows *what* the user wants to see, encode that in the URL; don't rely on the destination view's defaults to happen to match.
