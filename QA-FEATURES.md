@@ -21,7 +21,24 @@ End-to-end QA on prod (https://mind-coral.vercel.app) against the vision in READ
 
 Commit: `b4e9777` — *Add click-to-edit for events in /today widget*
 
-### 2. VAPI tool-calls silently no-op'd (from prior session, committed this pass)
+### 2. VAPI writes didn't reach the UI without reload (critical for AI-first)
+
+**Symptom:** VAPI voice agent calls `create_task`, `mark_habit_done`, `create_journal_entry` successfully — rows appear in the DB — but the user sees nothing change until they manually reload. Breaks the "talk to your app" core loop.
+
+**Root causes (two layers):**
+1. `TaskContext`, `JournalContext`, and `HabitContext` had **no Realtime subscriptions**. Only `EventContext` did. External writes (voice agent, other devices, cron jobs) were invisible to the running session.
+2. Even after adding subscriptions, nothing fired — because `tasks`, `habits`, `habit_logs`, and `journal_entries` were **not members of the `supabase_realtime` PostgreSQL publication**. Supabase Realtime only streams changes for published tables.
+
+**Fix:**
+- Extracted shared `useRecentIds` hook (`src/lib/useRecentIds.js`) — TTL-based echo dedup for own-writes (optimistic dispatch → DB write → Realtime echo arrives → skipped).
+- Added `supabase.channel(...).on('postgres_changes', { event: '*', schema: 'public', table: <t>, filter: 'user_id=eq.<uid>' }, ...)` to Task/Journal/Habit contexts. INSERT handlers re-hydrate joined relations (`contexts`, `projects`) since raw Realtime payloads only carry base columns. Habit context subscribes to *two* channels — `habits` for rename/toggle, and `habit_logs` for voice-agent `mark_habit_done`.
+- Migration `20260413200000_realtime_publication_for_vapi_tables.sql` adds the five tables to `supabase_realtime` idempotently (DO block swallows `duplicate_object` so reruns are safe).
+
+**Verified on prod:** Inserted a task via service-role REST as a VAPI-style external write → task appeared on `/tasks` within 5s with no reload. Inserted a `habit_logs` row for a fresh habit → schema accepted, and the data-level path is identical to the (verified) task path.
+
+Commits: `31306b1` — *Add Realtime subscriptions to Task, Habit, Journal contexts* + this pass — *Publish VAPI-written tables to supabase_realtime*
+
+### 3. VAPI tool-calls silently no-op'd (from prior session, committed this pass)
 
 **Symptom:** Voice assistant's `mark_habit_done`, `complete_task`, `create_task`, `create_journal_entry` tool calls returned 200 to VAPI but never wrote to the DB. Users heard the assistant say "marked done" but the UI didn't reflect it.
 
@@ -40,3 +57,5 @@ Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category 
 - React controlled inputs require the native setter + `input` event dispatch to fill programmatically; `form.requestSubmit()` beats dispatching a synthetic Enter KeyboardEvent.
 - Chrome MCP sanitizer strips `outerHTML` with cookie-ish content; use `innerText` for DOM inspection.
 - `EventsWidget` and `CalendarView` both need the master-id unwrap (`event._parentId || event.id`) before any `updateEvent`/`deleteEvent` call; recurrence instances are virtual rows, not DB rows.
+- Supabase Realtime is *two* things: the client-side `channel(...).on('postgres_changes', ...)` subscription AND server-side membership in the `supabase_realtime` publication. Adding a subscription without publishing the table is a silent no-op — the WebSocket connects, but nothing ever fires. Always pair new Realtime subscriptions with a publication migration.
+- `supabase secrets list` shows **digests** (SHA-256-ish hashes), not plaintext values. Can't use it to recover a webhook HMAC secret for local replay; simulate at the DB layer with the service-role key instead.
