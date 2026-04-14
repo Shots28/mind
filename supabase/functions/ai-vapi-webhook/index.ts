@@ -95,11 +95,13 @@ async function handleStatusUpdate(
 
   const admin = getSupabaseAdmin();
 
+  // Intentionally do NOT map "ended" here — end-of-call-report is the source of
+  // truth for final status (completed / no-answer / failed). Mapping "ended" to
+  // "completed" here would race with end-of-call-report and clobber the real outcome.
   const statusMap: Record<string, string> = {
     ringing: "ringing",
     "in-progress": "in-progress",
     forwarding: "in-progress",
-    ended: "completed",
   };
 
   const dbStatus = statusMap[status];
@@ -137,15 +139,18 @@ async function handleEndOfCallReport(body: Record<string, unknown>) {
   const durationSeconds = msg.durationSeconds as number ||
     body.durationSeconds as number;
 
-  // Determine final status
+  // Determine final status. VAPI uses many endedReason variants — pattern-match
+  // common buckets rather than enumerating every one, since new reasons get
+  // added and any unrecognized reason defaulting to "completed" silently
+  // misclassifies errors as success.
   let finalStatus = "completed";
-  if (
-    endedReason === "customer-did-not-answer" ||
-    endedReason === "customer-busy"
-  ) {
-    finalStatus = "no-answer";
-  } else if (endedReason === "error" || endedReason === "pipeline-error") {
-    finalStatus = "failed";
+  if (endedReason) {
+    const r = endedReason.toLowerCase();
+    if (r.includes("did-not-answer") || r.includes("busy") || r.includes("voicemail")) {
+      finalStatus = "no-answer";
+    } else if (r.includes("error") || r.includes("failed")) {
+      finalStatus = "failed";
+    }
   }
 
   // Update call record
@@ -277,16 +282,36 @@ Deno.serve(async (req: Request) => {
       }
 
       case "tool-calls": {
-        // VAPI sends tool-calls with toolCallList array
-        const toolCallList = body.message?.toolCallList || [];
+        // VAPI sends tool-calls with toolCallList array. Each entry follows the
+        // OpenAI tool-call shape: { id, type: "function", function: { name, arguments } }
+        // where `arguments` is a JSON string. Some VAPI integrations also flatten
+        // name/parameters onto the top level — handle both defensively.
+        const toolCallList = body.message?.toolCallList ||
+          body.message?.toolCalls ||
+          [];
         const results = [];
 
         for (const toolCall of toolCallList) {
-          const result = await handleFunctionCall(
-            toolCall.name,
-            toolCall.parameters || toolCall.arguments || {},
-            metadata
-          );
+          const fn = toolCall.function || toolCall;
+          const name = fn.name;
+
+          let parameters: Record<string, string> = {};
+          const rawArgs = fn.arguments ?? toolCall.parameters ?? toolCall.arguments;
+          if (rawArgs) {
+            if (typeof rawArgs === "string") {
+              try {
+                parameters = JSON.parse(rawArgs);
+              } catch (e) {
+                console.error("Failed to parse tool call arguments:", rawArgs, e);
+              }
+            } else {
+              parameters = rawArgs;
+            }
+          }
+
+          console.log("Tool call:", name, "params:", JSON.stringify(parameters));
+
+          const result = await handleFunctionCall(name, parameters, metadata);
           results.push({
             toolCallId: toolCall.id,
             result: result.result,

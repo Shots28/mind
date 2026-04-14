@@ -331,3 +331,53 @@ Created `supabase/functions/_shared/assistant-config.ts` to eliminate code dupli
 12. **Never compare timezone-naive date strings against a timestamptz column.** Postgres interprets naive strings as UTC, which is almost never what you want for "user's today." Always convert the user's local day to correct UTC start/end bounds before filtering. Use an Intl-based probe (not a hardcoded `* 3600` offset) so DST and unusual zones work.
 
 13. **Defensive auth should fail loudly, not silently.** A 401 with no log line is indistinguishable from a 500 or a 200 with no effect. Always log which branch of the auth check rejected and what the request claimed to be — cron misconfiguration is one of the easiest problems to diagnose if you can see it, and one of the hardest if you can't.
+
+---
+
+## QA Round 6 — Additional Bugs Found & Fixed
+
+### 16. tool-calls Webhook Read `toolCall.name` Instead of `toolCall.function.name` (Critical)
+
+**Symptom:** During an AI call, every tool invocation (`mark_habit_done`, `complete_task`, `create_task`, `create_journal_entry`) would silently no-op. The AI would say it marked a habit, but nothing changed in the database.
+
+**Root Cause:** VAPI sends OpenAI-shaped tool calls: `{ id, type: "function", function: { name, arguments } }` where `arguments` is a JSON string. The webhook read `toolCall.name` (always undefined in that shape) and `toolCall.parameters || toolCall.arguments` (which could be a JSON string passed through as the parameters object, so `parameters.habit_name === undefined`). The handler switch fell into `default`, returning `"Unknown function: undefined"` which VAPI relayed back to the AI with no user-visible error.
+
+Why it slipped past previous QA: earlier rounds verified the call dispatched and appeared in Call History, but didn't verify the AI's tool calls actually mutated state during the call. The success path looked identical to the failure path from the outside.
+
+**Fix:** Handle both OpenAI-shaped `toolCall.function.{name,arguments}` and the legacy flat shape defensively. Parse `arguments` as JSON when it's a string. Log each tool invocation so future regressions are visible in Supabase function logs.
+
+**File:** `supabase/functions/ai-vapi-webhook/index.ts`
+
+---
+
+### 17. status-update "ended" Clobbered Final Call Status (Medium)
+
+**Symptom:** Calls that didn't answer would sometimes show as `completed` in Call History instead of `no-answer`.
+
+**Root Cause:** `handleStatusUpdate` mapped `"ended"` → `"completed"` and wrote it to the DB. VAPI's event order isn't strictly guaranteed — if a `status-update: ended` arrived after `end-of-call-report` had already set the correct `no-answer`/`failed` status, the later "ended" write silently clobbered the real outcome.
+
+**Fix:** Removed the `"ended"` mapping from the status-update switch. `end-of-call-report` is now the single source of truth for final status (completed / no-answer / failed). Added an explanatory comment so the omission isn't "fixed" back in by a future refactor.
+
+**File:** `supabase/functions/ai-vapi-webhook/index.ts`
+
+---
+
+### 18. endedReason Matching Too Narrow — Errors Masked as "completed" (Medium)
+
+**Symptom:** A call that ended with e.g. `transport-error`, `assistant-error`, `silence-timed-out` would be stored as `completed`, polluting Call History and the retry pipeline (retry only runs on `no-answer`/`failed`).
+
+**Root Cause:** The endedReason matcher hardcoded a small list (`error`, `pipeline-error`, `customer-did-not-answer`, `customer-busy`). VAPI emits many more variants; any unrecognized reason defaulted to `completed`.
+
+**Fix:** Switched to lowercase substring matching — `includes("did-not-answer" | "busy" | "voicemail")` → no-answer, `includes("error" | "failed")` → failed, otherwise completed. Handles current and future VAPI variants without enumerating them.
+
+**File:** `supabase/functions/ai-vapi-webhook/index.ts`
+
+---
+
+## QA Round 6 — Lessons Learned
+
+14. **Verify the actual side effect, not just the proxy signal.** "Call dispatched" and "AI said it did the thing" are not the same as "the DB changed." For any AI-driven action, QA has to check the downstream record — the AI will happily read a "Unknown function: undefined" as "I couldn't find that habit" and move on, and the user hears a plausible failure, not a bug.
+
+15. **Know the exact shape of third-party webhook payloads — don't guess.** VAPI uses OpenAI-shaped tool calls (`function.name`, `function.arguments` as JSON string). Mismatching the shape fails silently because JavaScript will happily read `undefined` from any path. Always log the full payload once during development so the correct paths are visible, and parse defensively (handle both flat and nested shapes) for any field that different SDK versions might emit differently.
+
+16. **Prefer substring matching to enums when external systems define the vocabulary.** When a third-party emits status/reason strings we don't own, exact-match lookups rot: their vocabulary expands, and every new value silently slots into our default branch. Pattern-match on meaningful substrings instead — it's more forgiving, and a new error variant is still recognized as an error.
