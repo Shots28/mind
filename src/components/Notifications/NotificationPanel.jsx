@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTasks } from '../../contexts/TaskContext';
 import { toLocalDateString, isSameLocalDay } from '../../lib/dates';
 import { Bell, AlertTriangle, Clock, CheckCircle, X } from 'lucide-react';
@@ -6,6 +7,7 @@ import './Notifications.css';
 
 export default function NotificationPanel({ isOpen, onClose }) {
   const { tasks } = useTasks();
+  const navigate = useNavigate();
   const panelRef = useRef(null);
   const [dismissedIds, setDismissedIds] = useState(new Set());
 
@@ -44,6 +46,11 @@ export default function NotificationPanel({ isOpen, onClose }) {
 
   const handleDismiss = (key) => {
     setDismissedIds(prev => new Set([...prev, key]));
+  };
+
+  const handleOpen = (taskId) => {
+    navigate(`/tasks?task=${taskId}`);
+    onClose();
   };
 
   const handleDismissAll = () => {
@@ -94,7 +101,14 @@ export default function NotificationPanel({ isOpen, onClose }) {
         ) : (
           <div className="notification-list">
             {notifications.map(n => (
-              <div key={`${n.type}-${n.id}`} className={`notification-item ${n.type}`}>
+              <div
+                key={`${n.type}-${n.id}`}
+                className={`notification-item ${n.type}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleOpen(n.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpen(n.id); } }}
+              >
                 <div className={`notification-icon ${n.type}`}>{iconMap[n.type]}</div>
                 <div className="notification-content">
                   <span className="notification-title">{n.title}</span>
@@ -102,7 +116,7 @@ export default function NotificationPanel({ isOpen, onClose }) {
                 </div>
                 <button
                   className="btn-icon notification-dismiss-btn"
-                  onClick={() => handleDismiss(`${n.type}-${n.id}`)}
+                  onClick={(e) => { e.stopPropagation(); handleDismiss(`${n.type}-${n.id}`); }}
                 >
                   <X size={14} />
                 </button>

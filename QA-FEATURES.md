@@ -62,6 +62,23 @@ Commit: `ab0e70b` — *Realtime subscription + publication for VAPI call lifecyc
 
 Commit: `50db444` — *Recover VAPI tool-call userId via X-Call-Id header fallback*
 
+### 5. Notification bell items were click-dead (medium severity)
+
+**Symptom:** Clicking a row in the notification panel (overdue / due-today / completed task) did nothing. The only interactive affordance was the tiny × dismiss button on the right. Users had to close the panel, navigate to `/tasks`, scroll, and find the task manually — defeating the point of the notification. Inconsistent with the global search dropdown in the same TopBar, where each result row deep-links into `/tasks?task=<id>` and opens the edit modal.
+
+**Root cause:** In `NotificationPanel.jsx`, the `.notification-item` `<div>` had no `onClick`. Only the `<X>` dismiss button was interactive. No `useNavigate`, no deep-link.
+
+**Fix:** Mirror the global search pattern:
+- `useNavigate()` from react-router
+- `handleOpen(taskId)` → `navigate('/tasks?task=<id>')` then `onClose()` to close the panel
+- `role="button"` + `tabIndex={0}` + `onKeyDown` Enter/Space for keyboard access
+- `e.stopPropagation()` on the dismiss button so × doesn't also navigate
+- `cursor: pointer` on `.notification-item` in `Notifications.css` so the whole row reads as clickable
+
+`TasksView` already consumes `?task=<id>` (from a prior QA round) and opens the edit modal — no backend or routing changes needed.
+
+Commit: this pass — *Make notification items navigate to the task on click*
+
 ## Verified working (no changes needed)
 
 Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category filter, context filter. Habits: create, toggle, streak, progress. Journal: Cmd+Enter quick capture, date grouping. Events: calendar Month/Week/Day views, day-panel edit, daily recurrence, read-only Google sync rendering. Projects: create, inline add-task, progress counter. Contexts: switcher filtering. Notifications: due-today + completed. Global search across tasks. Signup onboarding (Welcome → first task prompt → "You're all set" → `/today` with the task present).
