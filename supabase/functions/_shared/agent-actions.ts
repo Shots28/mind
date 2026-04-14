@@ -207,6 +207,19 @@ function normalizePriority(raw?: string): string {
   return raw && VALID_PRIORITIES.has(raw) ? raw : "normal";
 }
 
+// Mood has no DB CHECK constraint, but the UI only renders an emoji for these
+// five values (JournalEntryCard.MOOD_EMOJI). VAPI's gpt-4o-mini and Claude's
+// transcript-to-journal path both occasionally paraphrase ("ecstatic",
+// "reflective", "anxious") — those strings land in the row but render as
+// nothing, so the user-visible effect is indistinguishable from "no mood
+// captured." Coerce unknowns to null so the DB state matches the UI state
+// (mood IS NULL = no indicator).
+const VALID_MOODS = new Set(["great", "good", "okay", "bad", "terrible"]);
+function normalizeMood(raw?: string | null): string | null {
+  if (!raw) return null;
+  return VALID_MOODS.has(raw) ? raw : null;
+}
+
 // Create a new task
 export async function createTask(
   userId: string,
@@ -244,7 +257,7 @@ export async function createJournalEntry(
   const { error } = await admin.from("journal_entries").insert({
     user_id: userId,
     content,
-    mood: mood || null,
+    mood: normalizeMood(mood),
     call_id: callId || null,
     source: "voice_agent",
   });

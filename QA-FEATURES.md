@@ -121,6 +121,23 @@ Both failures happen inside the tool-call handler's async promise (we register t
 
 Commit: `50f8efc` — *Sanitize VAPI create_task due_date + priority*
 
+### 8. Voice-agent `mood` column accepted arbitrary strings that the UI never renders (medium severity, AI-first gap)
+
+**Symptom:** `create_journal_entry` tool declares `mood` as an enum (`great|good|okay|bad|terrible`). VAPI's gpt-4o-mini *mostly* obeys the enum but occasionally paraphrases ("ecstatic", "anxious", "mixed"). The `generateJournalFromTranscript` fallback (Claude sonnet converting end-of-call transcript → journal entry) is even looser — it's prompted to pick from the enum, but Claude sometimes returns `"reflective"`, `"contemplative"`, etc. Both paths land the raw string in `journal_entries.mood` (no DB CHECK constraint on that column). The UI only renders an emoji for the five canonical values, so any out-of-enum mood silently shows up as a row with *no* mood indicator — indistinguishable from "no mood captured at all" from the user's POV.
+
+**Root cause:** `createJournalEntry` in `_shared/agent-actions.ts` wrote `mood: mood || null` — no validation against the enum the UI actually cares about. `mood` has no Postgres CHECK constraint (unlike `source`, which has `CHECK (source IN ('manual','voice_agent'))`), so garbage passed straight through. Same "invisible captured data" pattern as fix #6 — but here the fix is at the write boundary, not the read boundary.
+
+**Fix (`supabase/functions/_shared/agent-actions.ts`):**
+- `normalizeMood(raw)` — set-membership check against `{great, good, okay, bad, terrible}`; anything else → `null`. Falling back to `null` (not, say, `"okay"`) is deliberate: we must not fabricate a mood the user didn't express. `null` means "no indicator," which is exactly what the UI already shows for unknown strings — so DB state now matches UI state.
+- Applied inside `createJournalEntry`; covers both the VAPI tool-call path and `generateJournalFromTranscript`'s Claude-driven call (which reuses `createJournalEntry`).
+
+**Verified:**
+- Probed prod with a service-role REST insert `mood: "contemplative"` → journal page rendered row with phone-badge but zero mood emoji (reproduces the pre-fix invisible-data symptom).
+- Unit-tested `normalizeMood` against 12 cases (five valid enums, three LLM paraphrases, empty/null/undefined, uppercase) — all pass.
+- Deployed via `supabase functions deploy ai-vapi-webhook`. Future voice-agent journal entries with out-of-enum moods will be stored as `NULL` instead of garbage strings.
+
+Commit: this pass — *Normalize mood to enum or null in voice-agent journal writes*
+
 ## Verified working (no changes needed)
 
 Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category filter, context filter. Habits: create, toggle, streak, progress. Journal: Cmd+Enter quick capture, date grouping. Events: calendar Month/Week/Day views, day-panel edit, daily recurrence, read-only Google sync rendering. Projects: create, inline add-task, progress counter. Contexts: switcher filtering. Notifications: due-today + completed. Global search across tasks. Signup onboarding (Welcome → first task prompt → "You're all set" → `/today` with the task present).
@@ -136,4 +153,5 @@ Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category 
 - "AI-first real-time" means every DB table an external agent (voice, cron, integration) writes to must have both a client subscription *and* publication membership — otherwise the in-flight user sees stale state for the whole interaction window. Checklist when adding a new agent-writable table: (1) ALTER PUBLICATION, (2) context-level subscription, (3) reducer cases, (4) recent-ids dedup for own-writes.
 - **`async: true` VAPI tools detach user-facing confirmations from DB success.** The optimistic ack ("Added that to your list") goes out before the write completes. If the write fails — constraint violation, type mismatch, missing FK — the user still hears success. Treat every `agent-actions.ts` writer as if the LLM will pass malformed input: gate DB-constrained columns (date formats, enum values, FK existence) with a normalizer that either coerces to a valid value or drops the problematic field but still saves the row. Never let an LLM paraphrase cause a task/habit/journal to silently disappear.
 - LLM tool inputs are "trusted" only in the sense that we asked for a format — the schema `description` field is a request, not an enforcement mechanism. Treat tool arguments like untrusted JSON: validate at the boundary of `agent-actions`.
+- **"No DB CHECK constraint" does not mean "column accepts anything safely."** `journal_entries.mood` has no `CHECK` but the UI only renders five values — so missing constraint = silently-lost data, not safely-stored data. When a column's write path is LLM-driven and its read path has a finite render set (emoji map, icon enum, color table), normalize at write time to the UI's value set. The DB-write boundary is the last place you can force consistency between what the LLM said and what the user sees.
 - Displayable data the voice agent captures but the UI doesn't render becomes an invisible feature. Audit every tool-call parameter: if it ends up in a column, there should be a visible UI surface for it (even a subtle one — a 🙂 emoji in a header row is enough). Otherwise users get the feeling of "the AI listened but nothing happened."
