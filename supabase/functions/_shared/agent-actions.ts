@@ -83,6 +83,10 @@ export async function getUserContext(userId: string, timezone?: string) {
 
   return {
     habits: habitsWithStatus,
+    // Distinguishes "user has no habits at all" from "user has habits but none
+    // are scheduled for today" — the system prompt needs both to avoid telling
+    // a weekend-habit user "no habits set up yet" on a Wednesday.
+    totalHabitsCount: habits.length,
     tasks: tasks.map((t: { id: string; title: string; due_date: string | null; priority: string; category: string }) => ({
       id: t.id,
       title: t.title,

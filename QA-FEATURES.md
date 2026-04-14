@@ -136,7 +136,23 @@ Commit: `50f8efc` — *Sanitize VAPI create_task due_date + priority*
 - Unit-tested `normalizeMood` against 12 cases (five valid enums, three LLM paraphrases, empty/null/undefined, uppercase) — all pass.
 - Deployed via `supabase functions deploy ai-vapi-webhook`. Future voice-agent journal entries with out-of-enum moods will be stored as `NULL` instead of garbage strings.
 
-Commit: this pass — *Normalize mood to enum or null in voice-agent journal writes*
+Commit: `34308f7` — *Normalize voice-agent mood to UI enum or null*
+
+### 9. Voice agent told "no habits set up yet" when user had habits not due today (medium severity, AI-first gap)
+
+**Symptom:** User with e.g. five weekends-only habits gets a Wednesday check-in call. Agent section prompt says "No habits set up yet" and the LLM, following the prompt, offers to help set up some habits — despite the user already having habits, just none scheduled for the current day of the week. Same failure mode for weekdays-only habits on a Saturday, or custom-day habits on an off-day. Worse, the LLM can plausibly get talked into calling a tool it doesn't have (there is no `create_habit`), or the user feels unheard ("I already have habits, they're just weekly").
+
+**Root cause:** `getUserContext` filters habits by day-of-week into `habitsDueToday`, then returns only `habits: habitsWithStatus` — the total-habit count is discarded before it reaches the system prompt builder. `buildSystemPrompt` branches on `context.habits.length > 0`, so the "0 due today" case collapses into the "0 total" case, producing the misleading "No habits set up yet" string.
+
+**Fix:**
+- `agent-actions.ts` → `getUserContext` now also returns `totalHabitsCount: habits.length` (the pre-filter count).
+- `assistant-config.ts` → `buildSystemPrompt` adds a middle branch: if `habits.length === 0 && totalHabitsCount > 0`, the habits section reads *"No habits scheduled for today. Skip this section — don't suggest setting up new habits."* — explicit instruction so the LLM doesn't fish for habit setup.
+
+**Verified:**
+- Unit-tested the three-branch logic across 4 cases (0/0, 0/3, 1 done, 2 mixed) — all produce the expected prompt fragment.
+- Deployed via `supabase functions deploy ai-vapi-webhook ai-schedule-calls ai-retry-calls` (all three reference the shared `assistant-config.ts` bundle, so all need redeploying).
+
+Commit: this pass — *Distinguish "no habits yet" from "no habits today" in voice-agent prompt*
 
 ## Verified working (no changes needed)
 

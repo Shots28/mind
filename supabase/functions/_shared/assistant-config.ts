@@ -91,6 +91,10 @@ function buildSystemPrompt(
     habitsSection = context.habits
       .map((h: { title: string; done: boolean }) => `- ${h.title}: ${h.done ? "DONE" : "NOT DONE"}`)
       .join("\n");
+  } else if (context.totalHabitsCount > 0) {
+    // User has habits, just none scheduled for today (e.g. weekend-only habits
+    // on a weekday). Don't mislead the LLM into suggesting they set some up.
+    habitsSection = "No habits scheduled for today. Skip this section — don't suggest setting up new habits.";
   } else {
     habitsSection = "No habits set up yet.";
   }
