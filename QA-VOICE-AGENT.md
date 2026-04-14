@@ -552,3 +552,31 @@ This matters for three reasons: (1) TCPA/CTIA — you can't place automated call
 ## QA Round 10 — Lessons Learned
 
 26. **A database column with two meanings is a bug waiting for a third edit.** `end_date` worked fine for months because each code path only ever saw events from one origin — the form only created local events, the push mostly saw fresh local events, the pull wrote Google events straight through. The bug only surfaces on the edit-after-pull path, which is exactly the path that's hardest to exercise in tests. Normalize semantics at the trust boundary (the pull), not at every read site, so the internal invariant is "column X always means Y" rather than "column X means Y *if* source=Z."
+
+---
+
+## QA Round 11 — Real-User Audit of Edit/Delete Flows + Recurrence Deep-Dive
+
+**Scope:** Exercised every CRUD flow not previously covered — task edit/delete/menu, event edit/delete with recurring-instance exceptions, habit edit/delete (weekday/weekend frequencies), journal create/delete, project edit/delete with task reassignment, context switching, mobile layout — all live on https://mind-coral.vercel.app via real browser interactions. Most flows held up. One silent corruption emerged in recurring-event expansion.
+
+### 27. Monthly and Yearly Recurrence Drift Off the Intended Day-of-Month (High)
+
+**Symptom:** Create a monthly event starting **January 31**. Open the next month. Instead of showing "no occurrence in February" (February has no 31st) and then reappearing on March 31, the occurrence shows up on **March 3**. The event then fires Apr 3, May 3, Jun 3… silently off-by-three for the rest of time. Same shape on yearly: a yearly event on **Feb 29** of a leap year fires on Mar 1 in every non-leap year, instead of being skipped until the next leap year.
+
+**Root Cause:** [src/lib/recurrence.js](src/lib/recurrence.js) advanced MONTHLY/YEARLY frequencies with raw `Date.setMonth(+interval)` / `setFullYear(+interval)`. JavaScript's `setMonth` doesn't clamp — it *rolls over* when the day doesn't exist in the target month: `new Date(2026,0,31); d.setMonth(1)` → Mar 3 2026 (Jan 31 → "Feb 31" → rolls 3 days into March). After that first drift, subsequent `setMonth(+1)` calls keep the drifted day forever: Mar 3 → Apr 3 → May 3 → Jun 3. `BYMONTHDAY` was never read by the expander even though `RecurrenceSelector` emits it, so there was no fallback re-anchoring. The bug only manifests when the start day is 29, 30, or 31, which is why none of the existing tests caught it — every prior test used a start date ≤ 28.
+
+**Fix:** Anchor expansion on `eventStart`'s day-of-month instead of mutating a rolling `Date`. New helpers `monthlyOccurrence(start, offset)` and `yearlyOccurrence(start, offset)` build each occurrence via `new Date(year, month+offset, day, …)`, then validate that `result.getDate() === start.getDate()` (and for yearly, month too). If the target month doesn't contain that day, the helper returns `null` and the loop bumps `monthOrYearStep` by another `interval` without counting it toward COUNT — matching Google Calendar's behavior. The `addInterval` function is preserved for DAILY/WEEKLY where no anchoring is needed.
+
+Added three targeted tests: Jan 31 monthly produces Jan/Mar/May; Jan 31 monthly COUNT=3 picks Jan/Mar/May (not Jan/Feb/Mar); Feb 29 yearly fires only on 2024 and 2028 in a 2024–2029 window.
+
+**Files:** [src/lib/recurrence.js](src/lib/recurrence.js), [src/lib/__tests__/recurrence.test.js](src/lib/__tests__/recurrence.test.js)
+
+---
+
+## QA Round 11 — Lessons Learned
+
+27. **`setMonth`/`setFullYear` are silent rollover traps when paired with a "current date" accumulator pattern.** The expander used a classic `while (current <= end) { push(current); current = addInterval(current) }` loop. That pattern is correct for DAILY/WEEKLY because days/weeks are closed under addition — adding 7 days always lands on something valid. It's broken for MONTHLY/YEARLY because months have variable length, so the "add interval" op is not closed: sometimes the result drops a day, and since the accumulator stores only a `Date` with no memory of "I was supposed to be the 31st", the drop is permanent. Fix is to anchor on the origin and compute each occurrence from a counter (`start + N months`) rather than iteratively advancing — the origin's day-of-month stays the source of truth for every step.
+
+28. **Tests that use easy dates hide calendar-math bugs forever.** Every existing recurrence test used a start day of 1 or 2. None exercised the month boundaries where things drift: 29/30/31, Feb 29. A code reader would assume "monthly expansion" was well-tested because there are 15+ recurrence tests — but the test surface was actually narrow. Adding day-31 and leap-Feb cases caught the bug instantly. When writing tests for date math, pick dates that are **adversarial to the calendar** (end of month, leap day, DST transitions, year boundaries), not dates that happen to fall on the first of the month.
+
+29. **BYMONTHDAY emitted but never consumed is a whole class of RRULE bugs.** `RecurrenceSelector` builds `RRULE:FREQ=MONTHLY;BYMONTHDAY=31` for "on the 31st" — but `parseRRule` strips the field into the `rule` object and nothing ever reads `rule.BYMONTHDAY`. The visible fix anchors on `eventStart.getDate()` which happens to equal the intended BYMONTHDAY value in practice, so no functional gap. Worth auditing the full RRULE surface (BYSETPOS, BYMONTH, WKST, BYYEARDAY) the next time recurrence gets touched — anything the selector produces but the expander ignores is a latent mismatch.

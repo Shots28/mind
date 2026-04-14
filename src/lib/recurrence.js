@@ -32,6 +32,27 @@ function addInterval(date, freq, interval) {
   return d;
 }
 
+// Anchor monthly/yearly on eventStart's day-of-month. Returns null when the
+// target month doesn't contain that day (e.g. Feb 31, Feb 29 non-leap) so the
+// caller can skip instead of silently drifting into the next month.
+function monthlyOccurrence(start, monthOffset) {
+  const result = new Date(
+    start.getFullYear(), start.getMonth() + monthOffset, start.getDate(),
+    start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds()
+  );
+  if (result.getDate() !== start.getDate()) return null;
+  return result;
+}
+
+function yearlyOccurrence(start, yearOffset) {
+  const result = new Date(
+    start.getFullYear() + yearOffset, start.getMonth(), start.getDate(),
+    start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds()
+  );
+  if (result.getDate() !== start.getDate() || result.getMonth() !== start.getMonth()) return null;
+  return result;
+}
+
 function matchesByDay(date, byDay) {
   const days = byDay.split(',');
   const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
@@ -68,6 +89,7 @@ export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences
   const instances = [];
   let current = new Date(eventStart);
   let occurrenceCount = 0;
+  let monthOrYearStep = 0;
 
   const rStart = new Date(rangeStart);
   const rEnd = new Date(rangeEnd);
@@ -119,6 +141,20 @@ export function expandRecurringEvent(event, rangeStart, rangeEnd, maxOccurrences
       if (current.getDay() === eventStart.getDay() && interval > 1) {
         current.setDate(current.getDate() + (interval - 1) * 7);
       }
+    } else if (freq === 'MONTHLY' || freq === 'YEARLY') {
+      // Anchor on eventStart's day; skip months/years where that day doesn't exist
+      // instead of letting JS roll over (Jan 31 → Mar 3 on setMonth).
+      let next = null;
+      let attempts = 0;
+      while (!next && attempts < 120) {
+        monthOrYearStep += interval;
+        next = freq === 'MONTHLY'
+          ? monthlyOccurrence(eventStart, monthOrYearStep)
+          : yearlyOccurrence(eventStart, monthOrYearStep);
+        attempts++;
+      }
+      if (!next) break;
+      current = next;
     } else {
       current = addInterval(current, freq, interval);
     }

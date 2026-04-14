@@ -76,6 +76,48 @@ describe('expandRecurringEvent', () => {
     expect(result).toHaveLength(4);
   });
 
+  it('anchors monthly day-of-month and skips months without that day', () => {
+    // Jan 31 monthly should fire Jan 31, Mar 31, May 31 — NOT drift to Mar 3 via setMonth.
+    const event = {
+      ...baseEvent,
+      start_date: '2026-01-31T15:00:00.000Z',
+      end_date: '2026-01-31T16:00:00.000Z',
+      recurrence_rule: 'RRULE:FREQ=MONTHLY',
+    };
+    const result = expandRecurringEvent(event, '2026-01-01', '2026-06-30T23:59:59Z');
+    const dates = result.map(r => r.start_date.substring(8, 10));
+    expect(dates.every(d => d === '31')).toBe(true);
+    // Jan 31, Mar 31, May 31 in the window — Feb/Apr/Jun have no 31st
+    expect(result).toHaveLength(3);
+  });
+
+  it('monthly COUNT does not tick on skipped day-of-month months', () => {
+    const event = {
+      ...baseEvent,
+      start_date: '2026-01-31T15:00:00.000Z',
+      end_date: '2026-01-31T16:00:00.000Z',
+      recurrence_rule: 'RRULE:FREQ=MONTHLY;COUNT=3',
+    };
+    const result = expandRecurringEvent(event, '2026-01-01', '2026-12-31T23:59:59Z');
+    expect(result).toHaveLength(3);
+    const months = result.map(r => r.start_date.substring(5, 7));
+    expect(months).toEqual(['01', '03', '05']);
+  });
+
+  it('yearly Feb 29 only fires on leap years', () => {
+    const event = {
+      ...baseEvent,
+      start_date: '2024-02-29T15:00:00.000Z',
+      end_date: '2024-02-29T16:00:00.000Z',
+      recurrence_rule: 'RRULE:FREQ=YEARLY',
+    };
+    const result = expandRecurringEvent(event, '2024-01-01', '2029-12-31T23:59:59Z');
+    // Leap years in range: 2024, 2028
+    expect(result).toHaveLength(2);
+    const years = result.map(r => r.start_date.substring(0, 4));
+    expect(years).toEqual(['2024', '2028']);
+  });
+
   it('preserves event duration in instances', () => {
     const event = { ...baseEvent, recurrence_rule: 'RRULE:FREQ=DAILY' };
     const result = expandRecurringEvent(event, '2026-03-01', '2026-03-02');
