@@ -79,6 +79,48 @@ Commit: `50db444` — *Recover VAPI tool-call userId via X-Call-Id header fallba
 
 Commit: this pass — *Make notification items navigate to the task on click*
 
+### 6. Voice agent's mood was captured but invisible (medium severity, AI-first gap)
+
+**Symptom:** The VAPI `create_journal_entry` tool takes a `mood` enum (`great|good|okay|bad|terrible`). The LLM actually passes it — e.g., after a journaling section it calls `create_journal_entry(content, mood: "good")`. The value lands in `journal_entries.mood` in the DB. But the UI never rendered it anywhere. From the user's perspective: the voice agent asked how they were feeling, they answered, and the reflection was silently dropped. The most "AI-first" data the system captures was the most invisible.
+
+**Root cause:** `JournalEntryCard` only rendered `created_at`, `contexts.name`, and `content`. `mood` wasn't referenced in any component. `JournalContext.createEntry` accepted mood as a param but nothing in the UI passed it (or displayed it back).
+
+**Fix:** Added a mood emoji indicator in the entry header next to the phone-call badge:
+
+```
+great → 😄   good → 🙂   okay → 😐   bad → 🙁   terrible → 😞
+```
+
+- `MOOD_EMOJI` map in `JournalEntryCard.jsx`; renders `<span className="journal-entry-mood" title={entry.mood}>{MOOD_EMOJI[entry.mood]}</span>` when present
+- Unknown mood strings (LLM could say "ecstatic") render as nothing — no crash, no layout shift
+- Restructured `.journal-entry-header` to wrap time + mood in a `.journal-entry-meta` flex container with `margin-right: auto`, so context and delete button cluster cleanly on the right regardless of whether mood/context are present
+
+**Verified on prod:** Inserted a `journal_entries` row with `source: voice_agent, mood: good` via service-role → appeared on `/journal` within 3s via realtime with a 🙂 emoji next to the phone icon; hovering showed "good" tooltip. Inserted an out-of-enum mood ("ecstatic") → entry rendered cleanly with just the phone icon, no emoji, no error.
+
+Commit: `f378d3c` — *Surface mood on voice-agent journal entries*
+
+### 7. VAPI create_task silently lost tasks on unparseable inputs (high severity, AI-first gap)
+
+**Symptom:** User: *"Remind me to call mom on Thursday."* → Agent: *"Got it, added 'call mom' to your list."* → **task never appears.** Same failure mode for natural-language dates ("tomorrow", "next Friday") and paraphrased priorities ("super urgent", "medium"). The user hears success and trusts the system — the system is lying.
+
+**Root causes (two):**
+1. `tasks.due_date` is a DATE column. Inserting `"Thursday"` fails with Postgres error `22007: invalid input syntax for type date`.
+2. `tasks.priority` has a CHECK constraint `priority IN ('urgent','high','normal','low')`. Anything else fails with `23514: violates check constraint`.
+
+Both failures happen inside the tool-call handler's async promise (we register tools with `async: true` and wrap the DB write in `EdgeRuntime.waitUntil`). The optimistic ack went back to VAPI *before* the DB round-trip, so the agent's utterance ("I added that to your list") is fully detached from whether the write actually succeeded. Logs show the 22007 but there is no user-visible signal.
+
+**Fix (`supabase/functions/_shared/agent-actions.ts`):**
+- `normalizeDueDate(raw)` — regex-gates YYYY-MM-DD; anything else → `null` (task saved, just without a date). Better to drop the date than drop the task.
+- `normalizePriority(raw)` — set-membership check against the four valid values; anything else → `"normal"` fallback.
+- Both apply only to VAPI-originated writes; the web UI's `createTask` path continues to bind to the form's typed inputs and is unaffected.
+
+**Verified:**
+- REST POST with `due_date: "Thursday"` against raw `tasks` table → `22007` (reproduces the pre-fix failure).
+- Same POST with `due_date: "super urgent"` style priority → `23514`.
+- Post-fix, the sanitizers route both through to valid inserts; deployed via `supabase functions deploy ai-vapi-webhook`.
+
+Commit: `50f8efc` — *Sanitize VAPI create_task due_date + priority*
+
 ## Verified working (no changes needed)
 
 Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category filter, context filter. Habits: create, toggle, streak, progress. Journal: Cmd+Enter quick capture, date grouping. Events: calendar Month/Week/Day views, day-panel edit, daily recurrence, read-only Google sync rendering. Projects: create, inline add-task, progress counter. Contexts: switcher filtering. Notifications: due-today + completed. Global search across tasks. Signup onboarding (Welcome → first task prompt → "You're all set" → `/today` with the task present).
@@ -92,3 +134,6 @@ Tasks: quick-add, full modal, completion, drag-reorder, edit-on-click, category 
 - `supabase secrets list` shows **digests** (SHA-256-ish hashes), not plaintext values. Can't use it to recover a webhook HMAC secret for local replay; simulate at the DB layer with the service-role key instead.
 - Supabase Realtime `postgres_changes` with a `user_id=eq.<uid>` filter silently drops DELETE events unless the table has `REPLICA IDENTITY FULL` — the server can't evaluate the filter against `payload.old` when only the primary key is replicated. Fine for tables where hard-deletes don't happen externally (`calls`, `events` which soft-delete), but if you ever add an external hard-delete path to a filtered subscription, add `ALTER TABLE <t> REPLICA IDENTITY FULL` in the migration.
 - "AI-first real-time" means every DB table an external agent (voice, cron, integration) writes to must have both a client subscription *and* publication membership — otherwise the in-flight user sees stale state for the whole interaction window. Checklist when adding a new agent-writable table: (1) ALTER PUBLICATION, (2) context-level subscription, (3) reducer cases, (4) recent-ids dedup for own-writes.
+- **`async: true` VAPI tools detach user-facing confirmations from DB success.** The optimistic ack ("Added that to your list") goes out before the write completes. If the write fails — constraint violation, type mismatch, missing FK — the user still hears success. Treat every `agent-actions.ts` writer as if the LLM will pass malformed input: gate DB-constrained columns (date formats, enum values, FK existence) with a normalizer that either coerces to a valid value or drops the problematic field but still saves the row. Never let an LLM paraphrase cause a task/habit/journal to silently disappear.
+- LLM tool inputs are "trusted" only in the sense that we asked for a format — the schema `description` field is a request, not an enforcement mechanism. Treat tool arguments like untrusted JSON: validate at the boundary of `agent-actions`.
+- Displayable data the voice agent captures but the UI doesn't render becomes an invisible feature. Audit every tool-call parameter: if it ends up in a column, there should be a visible UI surface for it (even a subtle one — a 🙂 emoji in a header row is enough). Otherwise users get the feeling of "the AI listened but nothing happened."
