@@ -6,18 +6,23 @@ import { isGoogleEvent, formatTimeRange, getSyncStatusColor } from '../../lib/go
 import { isSameLocalDay } from '../../lib/dates';
 import { useToast } from '../Common/Toast';
 import ConfirmDialog from '../Common/ConfirmDialog';
+import Modal from '../Common/Modal';
+import EventForm from './EventForm';
+import RecurrenceActionDialog from './RecurrenceActionDialog';
 import './EventsWidget.css';
 
 const MAX_VISIBLE = 5;
 
 export default function EventsWidget({ date }) {
-  const { createEvent, deleteEvent, getExpandedEvents } = useEvents();
+  const { events, createEvent, updateEvent, deleteEvent, getExpandedEvents } = useEvents();
   const { activeContext } = useContexts();
   const [quickAdd, setQuickAdd] = useState('');
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const { showToast } = useToast();
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [recurrenceAction, setRecurrenceAction] = useState(null);
 
   const dateEvents = useMemo(() => {
     if (!date) return [];
@@ -59,12 +64,63 @@ export default function EventsWidget({ date }) {
   };
 
   const handleDelete = (event) => {
-    setDeleteTarget(event);
+    if (event.is_read_only) return;
+    if (event._isRecurrenceInstance || event.recurrence_rule) {
+      setRecurrenceAction({ event, action: 'delete' });
+    } else {
+      setDeleteTarget(event);
+    }
   };
 
   const confirmDeleteEvent = async () => {
-    if (deleteTarget) await deleteEvent(deleteTarget.id);
+    if (!deleteTarget) return;
+    const eventId = deleteTarget._parentId || deleteTarget.id;
+    await deleteEvent(eventId);
     setDeleteTarget(null);
+  };
+
+  const handleEventClick = (event) => {
+    if (event._isRecurrenceInstance && !event.is_read_only) {
+      setRecurrenceAction({ event, action: 'edit' });
+    } else {
+      setEditingEvent(event);
+    }
+  };
+
+  const handleUpdateEvent = async (eventData) => {
+    if (!editingEvent) return;
+    const eventId = editingEvent._parentId || editingEvent.id;
+    await updateEvent(eventId, eventData);
+    setEditingEvent(null);
+    showToast('Event updated');
+  };
+
+  const handleRecurrenceChoice = async (choice) => {
+    if (!recurrenceAction) return;
+    const { event, action } = recurrenceAction;
+    const masterId = event._parentId || event.id;
+
+    if (action === 'edit') {
+      if (choice === 'all') {
+        const master = events.find(e => e.id === masterId);
+        setEditingEvent(master || event);
+      } else {
+        setEditingEvent(event);
+      }
+    } else if (action === 'delete') {
+      if (choice === 'all') {
+        setDeleteTarget({ ...event, id: masterId });
+      } else {
+        const exceptionDate = event.start_date.substring(0, 10);
+        const masterEvent = events.find(e => e.id === masterId);
+        const currentExceptions = masterEvent?.exceptions || [];
+        await updateEvent(masterId, {
+          exceptions: [...currentExceptions, exceptionDate],
+        });
+        showToast('Instance removed');
+      }
+    }
+    setRecurrenceAction(null);
   };
 
   return (
@@ -73,7 +129,7 @@ export default function EventsWidget({ date }) {
       {dateEvents.length > 0 ? (
         <div className="events-list">
           {visibleEvents.map(event => (
-            <div key={event.id} className="event-item-widget">
+            <div key={event.id} className="event-item-widget" onClick={() => handleEventClick(event)} role="button" tabIndex={0}>
               {isGoogleEvent(event) ? (
                 <Cloud size={14} className="event-icon event-icon-google" />
               ) : (
@@ -97,7 +153,7 @@ export default function EventsWidget({ date }) {
               {event.is_read_only ? (
                 <Lock size={12} className="event-readonly" />
               ) : (
-                <button className="btn-icon event-delete" onClick={() => handleDelete(event)}>
+                <button className="btn-icon event-delete" onClick={(e) => { e.stopPropagation(); handleDelete(event); }}>
                   <Trash2 size={12} />
                 </button>
               )}
@@ -134,6 +190,23 @@ export default function EventsWidget({ date }) {
         title="Delete Event"
         message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.title}"?${isGoogleEvent(deleteTarget) ? ' This will also delete it from Google Calendar.' : ''}` : ''}
       />
+      <Modal isOpen={!!editingEvent} onClose={() => setEditingEvent(null)} title={editingEvent?.is_read_only ? 'Event Details' : 'Edit Event'}>
+        {editingEvent && (
+          <EventForm
+            initialData={editingEvent}
+            onSubmit={handleUpdateEvent}
+            onCancel={() => setEditingEvent(null)}
+            isReadOnly={editingEvent.is_read_only}
+          />
+        )}
+      </Modal>
+      {recurrenceAction && (
+        <RecurrenceActionDialog
+          action={recurrenceAction.action}
+          onChoice={handleRecurrenceChoice}
+          onCancel={() => setRecurrenceAction(null)}
+        />
+      )}
     </div>
   );
 }
