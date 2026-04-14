@@ -735,3 +735,60 @@ Optimistic acks describe *intent* ("recorded X"), not confirmed state — import
 41. **Voice UX needs `async: true` on any tool that writes to a DB.** Conversational AI over a real phone line has ~200 ms of tolerated pause before it sounds robotic. A Supabase DB write over Edge Functions routinely exceeds that. There is no scenario in a check-in flow where the LLM *needs* the tool's actual result before the next turn — it just needs to know the user said yes. Default to async tools + optimistic acks for any "agent takes an action on the user's behalf" pattern. Use sync tools only when the next turn of the conversation depends on the tool's return value (e.g., a search query).
 
 42. **`EdgeRuntime.waitUntil` is required to outlive the Response in Deno edge functions.** The instinctive pattern — fire the DB promise, `return new Response(...)` without awaiting — is broken in edge runtimes: once the response flushes, outstanding promises *can* be cancelled by the runtime. The fix is `EdgeRuntime.waitUntil(promise)` which marks the promise as work the runtime must keep alive until it resolves. Background tasks in serverless environments always need a keep-alive primitive or they leak cancellations nondeterministically.
+
+---
+
+## Round 15 — "Tools still didn't work and it wouldn't hang up"
+
+User feedback after the Round 14 "fix": *"It called me and that was fine. The call experience was a lot better. At the end it did not hang up even though multiple times it said it would. … the two calls don't seem to have worked. I'm looking at the UI and I don't see anything completed."*
+
+DB inspection confirmed: every call from tonight is stuck at `status=scheduled` with `started_at=null`, `ended_at=null`, `transcript=null`. VAPI successfully dialed the user both times — but zero webhook events ever reached our handler. Not `status-update`, not `tool-calls`, not `end-of-call-report`. Rounds 13–14 were fixing the wrong thing.
+
+### 34. Supabase Gateway JWT Check Silently Ate Every Webhook (Critical)
+
+**Symptom:** `curl -sS -X POST https://…/functions/v1/ai-vapi-webhook` returns `{"code":401,"message":"Missing authorization header"}` — the JSON shape of the Supabase **gateway's** rejection, not our function's `"Unauthorized"` plain-text 401. The function itself never executed. Every VAPI webhook POST bounced at the gateway before we even saw it.
+
+**Root Cause:** Supabase edge functions default to `verify_jwt = true` at the gateway. The gateway demands a valid Supabase Bearer JWT on every request to route it to the underlying function. VAPI doesn't send a Supabase JWT (and has no way to — it sends its own `x-vapi-secret` header). The fix we made in Round 14 (passing `server.secret` inline in the assistant config) was correct but unreachable — the gateway returned 401 *before* our `x-vapi-secret` check ever ran.
+
+The green `google-webhook` in the same project was reachable anonymously because someone had previously flipped `verify_jwt = false` on it via the dashboard. `ai-vapi-webhook` never got that treatment; it was shipped with the default, and it's been rejecting every VAPI event since the voice agent first existed. That's why rounds 1–14's fixes to the webhook body were unobservable: whatever we changed inside the function didn't matter because the function wasn't running.
+
+**Fix:** Added explicit `verify_jwt = false` entries to `supabase/config.toml` for the three functions that external services (or unauthenticated users) need to reach:
+```toml
+[functions.ai-vapi-webhook]
+verify_jwt = false
+[functions.google-webhook]
+verify_jwt = false
+[functions.google-oauth-callback]
+verify_jwt = false
+```
+Deployed with `supabase functions deploy ai-vapi-webhook --no-verify-jwt`. Verified: POST to the webhook now returns our function's `"Unauthorized"` (401 from the secret check) instead of the gateway's `{"code":401,"message":"Missing authorization header"}`. That's the shape we want — function is running, just rejecting unsigned requests.
+
+Defence in depth: our webhook still requires `x-vapi-secret` matching `VAPI_WEBHOOK_SECRET`, and the Round 14 inline `server.secret` fix now actually matters — VAPI stamps the header and our function accepts.
+
+**File:** `supabase/config.toml`
+
+### 35. AI Said "Goodbye" but Couldn't Hang Up (Medium)
+
+**Symptom:** *"At the end it did not hang up even though multiple times it said it would."* The AI would verbally wrap up, pause, wrap up again, pause, keep going. The call eventually terminated only because of VAPI's `silenceTimeoutSeconds: 30` — 30 seconds of dead air after the AI's last sentence.
+
+**Root Cause:** Our assistant config had zero call-termination mechanism. The LLM could *say* it was hanging up, but VAPI had no `endCall` tool, no `endCallPhrases` regex list, no `endCallMessage` trigger — so "goodbye" was just another utterance. VAPI kept the line open until silence timeout.
+
+**Fix:** Added VAPI's built-in `{ type: "endCall" }` as a tool on the model. Updated the system prompt's closing step: "Wrap up warmly in one sentence, THEN immediately call the endCall tool to hang up. Do NOT say you'll end the call and then keep talking or wait for the user to hang up."
+
+**File:** `supabase/functions/_shared/assistant-config.ts`
+
+### 36. Stuck "Scheduled" Calls Silently Blocked the Dup Check Forever (Low)
+
+**Symptom:** Once a call got a `vapi_call_id` but no end-of-call-report (bug #34), it sat in `status=scheduled` forever. The scheduling cron's dup check excludes only `("failed","no-answer")` — so any scheduled row blocks the user from receiving further calls today. User A's `d2445569` has been blocking since 9 hours ago.
+
+**Fix (operational, not code):** Patched user A's 9-hour-stale scheduled row to `failed`, and user B's two tonight-stuck rows to `completed` (calls did reach him — counting them as the day's check-in avoids re-dialing tonight). The structural fix — a janitor that times out calls stuck in `scheduled`/`ringing`/`in-progress` for >30 min — should land as a follow-up; deferred to avoid expanding this round's scope.
+
+### Lessons
+
+43. **When a webhook appears dead, test the gateway, not the function.** I chased this bug through three rounds: first by fixing the function's event-type switch, then the metadata path, then the auth secret, then the tool `async` flag. None of that mattered because the gateway had been 401'ing every request since the function was first deployed. A single `curl -X POST` to the webhook URL would have diagnosed this on day one — the JSON shape of a gateway 401 (`{"code":401,"message":"Missing authorization header"}`) is visibly different from a function 401 (plain text `"Unauthorized"` from our code). When a webhook "doesn't work", first verify the request is even reaching your code. Run `curl` before reading code.
+
+44. **Supabase `verify_jwt` defaults require explicit opt-out for any externally-invoked function.** The default is safe (gateway rejects anon requests) but silently wrong for webhooks where the third party can't send a Supabase JWT. The `verify_jwt = false` flag must be set in `config.toml` or via `supabase functions deploy --no-verify-jwt`; dashboard-only configuration is fragile (e.g., `google-webhook` was configured through the dashboard long ago and survives only as long as that dashboard setting does). Checklist for any new edge function: if an external service will POST to it, add the function to `config.toml` with `verify_jwt = false` in the same PR that creates the function.
+
+45. **"We deployed a fix" means nothing if you didn't observe the fix land.** Rounds 12–14 each claimed to fix the voice agent. Each round shipped, each round was checked via code review and function logs *visible to the deployer*, and each round left the real bug — a gateway 401 — untouched because the deployer never actually hit the webhook as an external caller would. The only honest validation for an external-webhook fix is: trigger an event that should cause the third party to POST your endpoint, and then *observe the row change in the DB*. Anything short of that is a claim, not a verification.
+
+46. **Conversation termination is a feature, not a side effect of the script ending.** On text-based assistants, "end of conversation" is implicit: user closes the tab. On a phone call, there is no close-the-tab equivalent from the AI's side — it must actively hang up the line. Every voice-agent spec should enumerate the termination mechanism, and the default must be a tool call the LLM can invoke, not a natural-language phrase the LLM is hoping the carrier will detect. If your voice agent's spec doesn't answer "how does the call end?" with a tool name, it will fail.

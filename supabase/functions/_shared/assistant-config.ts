@@ -72,6 +72,11 @@ function buildToolDefinitions() {
         },
       },
     },
+    // VAPI built-in: ends the phone call. Without this, the LLM can SAY
+    // "goodbye" but has no mechanism to actually terminate — the line stays
+    // open until the silence timeout or the user hangs up. Any wrap-up
+    // utterance must be followed by calling this tool.
+    { type: "endCall" },
   ];
 }
 
@@ -167,7 +172,9 @@ If YES:
 If NO: Acknowledge.
 
 ### 5. Closing
-Wrap up warmly. Keep it to one sentence.
+Wrap up warmly in one sentence, THEN immediately call the endCall tool to
+hang up. Do NOT say you'll end the call and then keep talking or wait for
+the user to hang up — you must actively terminate via endCall.
 
 ## RULES
 - Warm but concise. One sentence at a time. Never monologue.

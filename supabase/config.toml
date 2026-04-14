@@ -368,6 +368,19 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Public webhooks: external services (VAPI, Google) don't send Supabase
+# Bearer JWTs, so the gateway would 401 them before our handler runs. Each
+# function below enforces its own auth (VAPI shared secret, Google channel
+# token, OAuth state, Twilio Verify) in code.
+[functions.ai-vapi-webhook]
+verify_jwt = false
+
+[functions.google-webhook]
+verify_jwt = false
+
+[functions.google-oauth-callback]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
