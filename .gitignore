@@ -28,3 +28,6 @@ dist-ssr
 .vercel
 .claude/
 config.bat
+
+# env files (restored — supply-chain remediation)
+!.env.example
