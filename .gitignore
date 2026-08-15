@@ -31,3 +31,4 @@ config.bat
 
 # env files (restored — supply-chain remediation)
 !.env.example
+.env
